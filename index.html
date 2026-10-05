@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mascot Generator</title>
+<meta name="description" content="Build a soft 3D mascot from ready-made parts, then let any AI pose and animate it. Early prototype.">
+<style>
+  :root { --bg: #111216; --card: #1a1b21; --line: rgba(255,255,255,.08); --text: #ececf1; --muted: #9a9aa8; --accent: #7aa7ff; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 10; }
+  main { max-width: 1120px; margin: 0 auto; padding: 40px 16px 64px; }
+  header h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; margin: 0 0 10px; letter-spacing: -0.02em; }
+  .badge { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); border: 1px solid rgba(122,167,255,.4); border-radius: 999px; padding: 2px 10px; margin-bottom: 14px; }
+  header p { color: var(--muted); font-size: clamp(15px, 2vw, 18px); max-width: 700px; margin: 0; }
+  section { margin-top: 44px; }
+  h2 { font-size: 20px; margin: 0 0 4px; } .lead { color: var(--muted); margin: 0 0 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
+  #hero-view { width: 100%; height: clamp(260px, 46vw, 470px); touch-action: none; cursor: grab; }
+  .configurator { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; }
+  #cfg-view { width: 100%; height: 100%; min-height: 420px; touch-action: none; cursor: grab; }
+  .controls { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+  .group h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font: inherit; font-size: 13px; color: var(--text); background: rgba(255,255,255,.07); border: 1px solid transparent; border-radius: 999px; padding: 5px 11px; cursor: pointer; }
+  .chip:hover { background: rgba(255,255,255,.13); }
+  .chip[aria-pressed="true"] { background: rgba(122,167,255,.18); border-color: var(--accent); }
+  .colors { display: flex; flex-wrap: wrap; gap: 7px; } .colors.muted { opacity: .35; }
+  .swatch { width: 26px; height: 26px; border-radius: 50%; border: 2px solid rgba(255,255,255,.18); cursor: pointer; padding: 0; }
+  .swatch[aria-pressed="true"] { border-color: #fff; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+  .toggles { display: flex; gap: 16px; } .toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btn { font: inherit; font-weight: 600; color: var(--text); background: rgba(255,255,255,.1); border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: #0d1020; } .btn:hover { filter: brightness(1.1); } .btn:disabled { opacity: .6; cursor: progress; }
+  #dl-note { color: var(--muted); font-size: 13px; min-height: 1em; margin: 0; }
+  .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .tile { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px 6px 10px; text-align: center; }
+  .tile-view { width: 100%; aspect-ratio: 1; } .tile figcaption { color: var(--muted); font-size: 13px; }
+  footer { margin-top: 56px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
+  footer p { margin: 0 0 6px; max-width: 760px; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (max-width: 880px) { .configurator { grid-template-columns: 1fr; } #cfg-view { height: 380px; min-height: 0; } }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<canvas id="gl" aria-hidden="true"></canvas>
+<main>
+  <header>
+    <span class="badge">Early prototype</span>
+    <h1>Mascot Generator</h1>
+    <p>Build a soft 3D mascot from ready-made parts. Then let any AI pick it up, pose it and animate it — for videos, games and apps.</p>
+  </header>
+
+  <section aria-labelledby="h-scene">
+    <h2 id="h-scene">Two mascots meet</h2>
+    <p class="lead">Same skeleton, same moves: walking, waving, a high five, a little celebration. Drag to look around.</p>
+    <div class="card"><div id="hero-view" role="img" aria-label="Animated scene: a white mascot wakes up, a blue one walks in, they wave, high-five, celebrate and hug."></div></div>
+  </section>
+
+  <section aria-labelledby="h-make">
+    <h2 id="h-make">Make your own</h2>
+    <p class="lead">Pick a shape, a color and a finish, then try the moves. Every move works on every mascot.</p>
+    <div class="configurator">
+      <div class="card"><div id="cfg-view" role="img" aria-label="Your mascot, animated"></div></div>
+      <div class="card controls">
+        <div class="group"><h3>Shape</h3><div class="chips" id="shapes"></div></div>
+        <div class="group"><h3>Color</h3><div class="colors" id="colors"></div></div>
+        <div class="group"><h3>Finish</h3><div class="chips" id="finishes"></div></div>
+        <div class="group"><h3>Add-ons</h3><div class="toggles"><label><input type="checkbox" id="arms"> Arms</label><label><input type="checkbox" id="legs"> Legs</label></div></div>
+        <div class="group"><h3>Moves</h3><div class="chips" id="moves"></div></div>
+        <div class="actions"><button class="btn" id="random">Surprise me</button><button class="btn primary" id="download">Download .glb</button></div>
+        <p id="dl-note" aria-live="polite"></p>
+      </div>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-shapes">
+    <h2 id="h-shapes">One method, any shape</h2>
+    <p class="lead">Each body is inflated from a flat 2D silhouette, like a cushion. Add a silhouette and you get a new character.</p>
+    <div class="gallery" id="gallery-shapes"></div>
+  </section>
+
+  <section aria-labelledby="h-finishes">
+    <h2 id="h-finishes">Finishes</h2>
+    <p class="lead">From vinyl toy to flat drawing: the cut-out finishes show a flat 2D image through a moving 3D silhouette.</p>
+    <div class="gallery" id="gallery-finishes"></div>
+  </section>
+
+  <footer>
+    <p>An open-source tool in the making: create your mascot with ready-made parts, keep it in a library, and let AI agents use it through MCP to make videos, games and apps. Exports glTF (.glb) with a skeleton and named moves.</p>
+    <p>Prototype, October 2026 · built with <a href="https://threejs.org" style="color: var(--accent)">three.js</a> · color-flow and cut-out finishes export as vinyl.</p>
+  </footer>
+</main>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+
+const PI = Math.PI;
+const phase = (t, p) => ((t % p) + p) % p / p;
+const ease = x => 1 - Math.pow(1 - Math.min(Math.max(x, 0), 1), 3);
+const smooth = (a, b, x) => { const k = Math.min(Math.max((x - a) / (b - a), 0), 1); return k * k * (3 - 2 * k); };
+
+// ---------- La sagoma: il contorno 2D del Mostro (docs/prototipo-siigil/base.swift), girato in volume ----------
+// Metà destra del contorno, dalla cima al fondo, con lo stesso allungamento a terra del prototipo; unità: altezza ≈ 1.
+function profile() {
+  const q = (a, c, b, t) => [(1-t)*(1-t)*a[0] + 2*(1-t)*t*c[0] + t*t*b[0], (1-t)*(1-t)*a[1] + 2*(1-t)*t*c[1] + t*t*b[1]];
+  const cu = (a, c1, c2, b, t) => { const u = 1 - t; return [u*u*u*a[0] + 3*u*u*t*c1[0] + 3*u*t*t*c2[0] + t*t*t*b[0], u*u*u*a[1] + 3*u*u*t*c1[1] + 3*u*t*t*c2[1] + t*t*t*b[1]]; };
+  const pts = [];
+  for (let i = 0; i <= 10; i++) pts.push(q([22,31], [50,25], [78,31], 0.5 + 0.05 * i));
+  for (let i = 1; i <= 10; i++) pts.push(q([78,31], [89,32], [89,44], i / 10));
+  for (let i = 1; i <= 24; i++) pts.push(cu([89,44], [89,62], [82,78], [68,80], i / 24));
+  for (let i = 1; i <= 10; i++) pts.push(q([68,80], [50,84], [32,80], 0.05 * i));
+  const stretch = y => 25 + (y - 25) * 65 / 57;   // nel prototipo il Mostro è allungato fino a terra
+  return pts.map(([x, y]) => [Math.max(x - 50, 0) / 62, (90 - stretch(y)) / 62]).reverse();   // dal fondo alla cima
+}
+const PROF = profile();
+const H = PROF[PROF.length - 1][1];
+const radiusAt = h => {   // raggio della sagoma a una certa altezza (il punto più largo, se ce ne sono due)
+  let r = 0;
+  for (let i = 1; i < PROF.length; i++) {
+    const [r0, h0] = PROF[i - 1], [r1, h1] = PROF[i];
+    if ((h - h0) * (h - h1) <= 0 && h1 !== h0) r = Math.max(r, r0 + (r1 - r0) * (h - h0) / (h1 - h0));
+  }
+  return r;
+};
+const N = 2.8, DEPTH = 0.78;   // sezione a "cuscino": superellisse, profonda il 78 % della larghezza
+
+// Il corpo: anelli della sezione a cuscino lungo il contorno, con il peso delle tre ossa per altezza.
+function bodyGeometry(seg = 72) {
+  const pos = [], skinI = [], skinW = [], idx = [];
+  for (const [r, h] of PROF) {
+    const u = h / H, w1 = smooth(0, 0.32, u), w2 = smooth(0.32, 0.62, u);   // radice → corpo → cima
+    for (let j = 0; j < seg; j++) {
+      const a = j / seg * 2 * PI, c = Math.cos(a), s = Math.sin(a);
+      pos.push(r * Math.sign(c) * Math.pow(Math.abs(c), 2 / N), h, DEPTH * r * Math.sign(s) * Math.pow(Math.abs(s), 2 / N));
+      skinI.push(0, 1, 2, 0);
+      skinW.push((1 - w1), w1 * (1 - w2), w1 * w2, 0);
+    }
+  }
+  const rings = PROF.length;
+  for (let i = 0; i < rings - 1; i++) for (let j = 0; j < seg; j++) {
+    const a = i * seg + j, b = i * seg + (j + 1) % seg, c = (i + 1) * seg + j, d = (i + 1) * seg + (j + 1) % seg;
+    idx.push(a, c, b, b, c, d);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinI, 4));
+  g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(skinW, 4));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  const mid = Math.floor(rings / 2) * seg;   // le normali devono guardare fuori: se no si gira il verso dei triangoli
+  if (g.attributes.normal.getX(mid) < 0) {
+    for (let i = 0; i < idx.length; i += 3) [idx[i + 1], idx[i + 2]] = [idx[i + 2], idx[i + 1]];
+    g.setIndex(idx); g.computeVertexNormals();
+  }
+  return g;
+}
+const BODY = bodyGeometry();
+
+// Dove sta la superficie davanti, a una certa x e altezza, e verso dove guarda (per appoggiarci gli occhi).
+function onSurface(x, h) {
+  const r = radiusAt(h), k = Math.min(Math.abs(x) / r, 0.98);
+  const z = DEPTH * r * Math.pow(1 - Math.pow(k, N), 1 / N);
+  const nx = Math.sign(x) * Math.pow(Math.abs(x) / r, N - 1) / r, nz = Math.pow(z / (DEPTH * r), N - 1) / (DEPTH * r);
+  return { z, yaw: Math.atan2(nx, nz) };
+}
+
+// La forma "girata" del Mostro (la prima versione), con lo stesso schema delle forme gonfiate.
+const LATHE = { geo: BODY, H, eyeH: 0.64 * H, eyeX: 0.25 * 84 / 62, bones: [0.32 * H, 0.62 * H],
+  surface: (x, h) => ({ ...onSurface(x, h), pitch: 0 }), width: radiusAt };
+
+// ---------- Il gonfiaggio: qualunque sagoma 2D diventa un solido morbido ----------
+// Le sagome del prototipo (coordinate 0…100, suolo a 90), disegnate su una tela 2D.
+const SHAPES2D = {
+  mostro: g => { const Y = y => 25 + (y - 25) * 65 / 57;   // allungato fino a terra come nel prototipo
+    g.moveTo(22, Y(31)); g.quadraticCurveTo(50, Y(25), 78, Y(31)); g.quadraticCurveTo(89, Y(32), 89, Y(44));
+    g.bezierCurveTo(89, Y(62), 82, Y(78), 68, Y(80)); g.quadraticCurveTo(50, Y(84), 32, Y(80));
+    g.bezierCurveTo(18, Y(78), 11, Y(62), 11, Y(44)); g.quadraticCurveTo(11, Y(32), 22, Y(31)); },
+  quadrato: g => g.roundRect(8, 28, 84, 62, 27.3),
+  capsula: g => g.roundRect(5, 35, 90, 55, 27.5),
+  goccia: g => { g.moveTo(50, 20); g.bezierCurveTo(66.8, 26.2, 92, 41.08, 92, 67.68); g.bezierCurveTo(92, 87.52, 78.56, 90, 50, 90);
+    g.bezierCurveTo(21.44, 90, 8, 87.52, 8, 67.68); g.bezierCurveTo(8, 41.08, 33.2, 26.2, 50, 20); },
+  dolcetto: g => { g.moveTo(20, 90); g.bezierCurveTo(12, 90, 10, 82, 10, 72); g.bezierCurveTo(10, 50, 26, 36, 50, 36);
+    g.bezierCurveTo(74, 36, 90, 50, 90, 72); g.bezierCurveTo(90, 82, 88, 90, 80, 90); },
+  nuvoletta: g => { g.roundRect(10, 54, 80, 36, 18); for (const [x, y, r] of [[31, 56, 19], [53, 45, 23], [73, 57, 17]]) { g.moveTo(x + r, y); g.arc(x, y, r, 0, 2 * PI); } },
+  cuore: g => { g.moveTo(50, 35.6); g.bezierCurveTo(50, 32.9, 46, 22, 30, 22); g.bezierCurveTo(14, 22, 10, 34, 10, 46.9);
+    g.bezierCurveTo(10, 62, 26, 76, 44, 86.5); g.quadraticCurveTo(50, 93.5, 56, 86.5); g.bezierCurveTo(74, 76, 90, 62, 90, 46.9);
+    g.bezierCurveTo(90, 34, 86, 22, 70, 22); g.bezierCurveTo(54, 22, 50, 32.9, 50, 35.6); },
+  fantasmino: g => { g.moveTo(14, 82); g.lineTo(14, 56); g.arc(50, 56, 36, PI, 0); g.lineTo(86, 82);
+    for (let i = 0; i < 4; i++) { const x = 86 - i * 18; g.quadraticCurveTo(x - 9, 97, x - 18, 82); } },
+};
+// Occhi come nel prototipo (altezza dalla cima del riquadro, distanza dal centro): fitEyes e preimpostazione del Mostro.
+const EYES2D = { mostro: [0.36, 0.25], quadrato: [0.56, 0.185], capsula: [0.56, 0.185], goccia: [0.56, 0.185], dolcetto: [0.64, 0.185],
+  nuvoletta: [0.56, 0.185], cuore: [0.38, 0.185], fantasmino: [0.5, 0.185] };
+
+// Distanza di ogni punto dal bordo (trasformata di distanza esatta, Felzenszwalb), su una griglia di 256 × 256.
+function edt1d(f, n) {
+  const d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1); let k = 0; z[0] = -1e20; z[1] = 1e20;
+  for (let q = 1; q < n; q++) {
+    let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); }
+    k++; v[k] = q; z[k] = s; z[k + 1] = 1e20;
+  }
+  k = 0; for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+  return d;
+}
+const RES2D = 256, PX = RES2D / 100;
+function heightMap(name) {
+  const c = document.createElement('canvas'); c.width = c.height = RES2D;
+  const g = c.getContext('2d'); g.scale(PX, PX); g.beginPath(); SHAPES2D[name](g); g.fill();
+  const a = g.getImageData(0, 0, RES2D, RES2D).data, n = RES2D;
+  const edt = inside => {   // distanza di ogni punto dal lato opposto (dentro → fuori, o fuori → dentro)
+    const f = new Float64Array(n * n), col = new Float64Array(n);
+    for (let i = 0; i < n * n; i++) f[i] = (a[i * 4 + 3] > 127) === inside ? 1e20 : 0;
+    for (let x = 0; x < n; x++) { for (let y = 0; y < n; y++) col[y] = f[y * n + x]; const d = edt1d(col, n); for (let y = 0; y < n; y++) f[y * n + x] = d[y]; }
+    for (let y = 0; y < n; y++) { const d = edt1d(f.subarray(y * n, y * n + n), n); for (let x = 0; x < n; x++) f[y * n + x] = d[x]; }
+    return f;
+  };
+  const fin = edt(true), fout = edt(false);
+  let sd = new Float32Array(n * n), dmax = 0;   // distanza col segno, in unità del 3D: positiva dentro, negativa fuori
+  for (let i = 0; i < n * n; i++) { sd[i] = (Math.sqrt(fin[i]) - Math.sqrt(fout[i])) / PX / 62; dmax = Math.max(dmax, sd[i]); }
+  for (let pass = 0; pass < 2; pass++) {   // una leggera sfocatura: bordo liscio e niente pieghe lungo l'asse della sagoma
+    const t = sd.slice();
+    for (let y = 2; y < n - 2; y++) for (let x = 2; x < n - 2; x++) { let s2 = 0;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) s2 += t[(y + dy) * n + x + dx]; sd[y * n + x] = s2 / 25; }
+  }
+  // spessore: bordi tondi come un quarto di cerchio, poi pieno e morbido al centro (un cuscino, non una lente); fuori resta
+  // la distanza col segno, così la superficie si chiude liscia sul contorno
+  const R = 0.7 * dmax, D = 0.9 * dmax, hm = new Float32Array(n * n);
+  for (let i = 0; i < n * n; i++) { const u = Math.min(Math.max(sd[i], 0) / R, 1); hm[i] = sd[i] > 0 ? D * Math.sqrt(1 - (1 - u) * (1 - u)) : sd[i] * 8; }   // fuori più ripido: il bordo non si sgrana
+  const at = (X, Y) => {   // spessore a un punto della tela (0…100), interpolato
+    const fx = Math.min(Math.max(X * PX, 0), n - 1.001), fy = Math.min(Math.max(Y * PX, 0), n - 1.001), x0 = fx | 0, y0 = fy | 0, tx = fx - x0, ty = fy - y0;
+    const h00 = hm[y0 * n + x0], h10 = hm[y0 * n + x0 + 1], h01 = hm[(y0 + 1) * n + x0], h11 = hm[(y0 + 1) * n + x0 + 1];
+    return (h00 * (1 - tx) + h10 * tx) * (1 - ty) + (h01 * (1 - tx) + h11 * tx) * ty;
+  };
+  return { at, D };
+}
+const ZMAX = 0.6, MC_RES = 96;
+const SHAPE_TIMES = [];
+function inflate(name) {
+  const t0 = performance.now(), hmap = heightMap(name);
+  const mc = new MarchingCubes(MC_RES, new THREE.MeshBasicMaterial(), false, false, 200000);
+  mc.isolation = 0.0005; mc.reset();
+  const n = MC_RES, half = n / 2;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const X = ((x - half) / half + 1) * 50, Y = 100 - ((y - half) / half + 1) * 50, hh = hmap.at(X, Y);
+    for (let z = 0; z < n; z++) mc.field[z * n * n + y * n + x] = hh - Math.abs((z - half) / half * ZMAX);
+  }
+  mc.update();
+  const cnt = mc.count, pos = new Float32Array(cnt * 3), nor = new Float32Array(cnt * 3);
+  const sx = 50 / 62; let top = 0;
+  for (let i = 0; i < cnt; i++) {
+    const px = mc.positionArray[i * 3], py = mc.positionArray[i * 3 + 1], pz = mc.positionArray[i * 3 + 2];
+    pos[i * 3] = px * sx; pos[i * 3 + 1] = ((py + 1) * 50 - 10) / 62; pos[i * 3 + 2] = pz * ZMAX; top = Math.max(top, pos[i * 3 + 1]);
+    const nx = mc.normalArray[i * 3] / sx, ny = mc.normalArray[i * 3 + 1] / sx, nz = mc.normalArray[i * 3 + 2] / ZMAX, l = Math.hypot(nx, ny, nz) || 1;
+    nor[i * 3] = nx / l; nor[i * 3 + 1] = ny / l; nor[i * 3 + 2] = nz / l;
+  }
+  const [eyeY, gap] = EYES2D[name], eyeH = (90 - (28 + eyeY * 62)) / 62;
+  const topB = Math.min(0.62 * top, eyeH - 0.06), midB = topB * 0.52;
+  const skinI = new Uint16Array(cnt * 4), skinW = new Float32Array(cnt * 4);
+  for (let i = 0; i < cnt; i++) {
+    const y = pos[i * 3 + 1], w1 = smooth(0, midB, y), w2 = smooth(midB, topB, y);
+    skinI.set([0, 1, 2, 0], i * 4); skinW.set([1 - w1, w1 * (1 - w2), w1 * w2, 0], i * 4);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(skinI, 4)); geo.setAttribute('skinWeight', new THREE.BufferAttribute(skinW, 4));
+  mc.geometry.dispose();
+  SHAPE_TIMES.push(performance.now() - t0);
+  const e = 1 / 62;   // un'unità della tela, in 3D
+  return { geo: mergeVertices(geo, 1e-5), H: top, eyeH, eyeX: gap * 84 / 62, bones: [midB, topB], tris: cnt / 3,
+    width: h => { const Y = 90 - h * 62; let X = 50; while (X < 99 && hmap.at(X + 0.5, Y) > 0.001) X += 0.5; return (X - 50) / 62; },
+    surface: (x, h) => { const X = x * 62 + 50, Y = 90 - h * 62, z = hmap.at(X, Y);
+      const hx = (hmap.at(X + 1, Y) - hmap.at(X - 1, Y)) / (2 * e), hy = (hmap.at(X, Y - 1) - hmap.at(X, Y + 1)) / (2 * e);
+      return { z, yaw: Math.atan2(-hx, 1), pitch: Math.atan2(hy, 1) }; } };
+}
+const SHAPE_CACHE = {};
+const shapeOf = name => name ? (SHAPE_CACHE[name] ??= inflate(name)) : LATHE;
+
+// ---------- Materiali ----------
+const WHITE = new THREE.Color(0.96, 0.97, 0.99), RED = new THREE.Color(0.88, 0.2, 0.24), INK = new THREE.Color(0.09, 0.09, 0.11);
+function toonRamp() {
+  const t = new THREE.DataTexture(new Uint8Array([175, 222, 255]), 3, 1, THREE.RedFormat);
+  t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t;
+}
+const RAMP = toonRamp();
+const RAMP2 = (() => { const t = new THREE.DataTexture(new Uint8Array([200, 255]), 2, 1, THREE.RedFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
+const BLUE = new THREE.Color(0.45, 0.62, 0.98);
+function bodyMaterial(finish, color = WHITE) {
+  switch (finish) {
+    case 'lucida': return new THREE.MeshPhysicalMaterial({ color, roughness: 0.28, clearcoat: 1, clearcoatRoughness: 0.08 });
+    case 'gommoso': return new THREE.MeshPhysicalMaterial({ color, roughness: 0.9, sheen: 1, sheenColor: new THREE.Color(1, 1, 1), sheenRoughness: 0.45 });
+    case 'toon': return new THREE.MeshToonMaterial({ color, gradientMap: RAMP, emissive: new THREE.Color(0.42, 0.42, 0.43) });   // il toon non usa la luce d'ambiente: un po' di luce propria
+    case 'duetoni': return new THREE.MeshToonMaterial({ color, gradientMap: RAMP2, emissive: color.clone().multiplyScalar(0.42) });   // luce e una sola ombra, a taglio netto
+    case 'piatto': return new THREE.MeshBasicMaterial({ color });   // colore pieno: niente luci né ombre
+    case 'sfera': return sphereMaterial();
+    default: return new THREE.MeshPhysicalMaterial({ color, roughness: 0.6 });   // vinile opaco
+  }
+}
+// "Colori della sfera": cinque macchie di colore che girano lente dentro il corpo (come la sfera di Siigil), lucide e un
+// po' luminose. Le macchie stanno nello spazio del corpo, così seguono le sue deformazioni.
+const PALETTES = {
+  lavora: [[1, 0.36, 0.62], [0.62, 0.36, 1], [0.25, 0.55, 1], [0.2, 0.9, 0.95], [1, 0.55, 0.35]],   // multicolore
+  dorme: [[0.35, 0.7, 1], [0.3, 0.85, 0.6], [0.55, 0.85, 1], [0.2, 0.75, 0.75], [0.4, 0.6, 1]],      // azzurro e verde
+  aspetta: [[1, 0.85, 0.3], [1, 0.6, 0.2], [1, 0.75, 0.25], [1, 0.5, 0.15], [1, 0.9, 0.45]],        // giallo e arancio
+  finito: [[0.35, 0.85, 0.45], [0.55, 0.95, 0.55], [0.25, 0.75, 0.5], [0.6, 0.9, 0.4], [0.4, 0.9, 0.7]],   // verde
+};
+// Texture 2D "ritagliata" dal 3D: il corpo fa solo da finestra sagomata; dentro si vede un'immagine piatta, senza luci,
+// che non si avvolge sul volume. Modo "fermo": la texture è ferma nella cella. Modo "segue": si sposta e si ingrandisce
+// con la mascotte, ma resta sempre piatta verso chi guarda. Texture: sfumatura 2D di Siigil, sfera 2D, puntini, carta.
+const TEX_KIND = { sfumatura: 0, sfera: 1, puntini: 2, carta: 3 };
+function clipMaterial(kind, mode) {
+  const m = new THREE.MeshBasicMaterial({ color: 0xffffff });
+  m.userData.u = { uRect: { value: new THREE.Vector4(0, 0, 1, 1) }, uAnchor: { value: new THREE.Vector2(0.5, 0.5) }, uScale: { value: 0.3 },
+    uTime: { value: 0 }, uMode: { value: mode === 'segue' ? 1 : 0 }, uTex: { value: TEX_KIND[kind] } };
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, m.userData.u);
+    sh.fragmentShader = `uniform vec4 uRect; uniform vec2 uAnchor; uniform float uScale, uTime, uMode, uTex;
+      float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+      vec3 flat2d(vec2 cell) {
+        // q: coordinate piatte. Fermo: la cella (da -1 a 1). Segue: unità del corpo, centro a metà altezza (da -0,5 a 0,5 in alto)
+        vec2 q = uMode < 0.5 ? (cell - 0.5) * 2.0 : (cell - uAnchor) / uScale;
+        float t = uMode < 0.5 ? 1.0 - cell.y : clamp(0.5 - q.y, 0.0, 1.0);   // 0 in alto, 1 in basso
+        vec3 base = vec3(0.96, 0.97, 0.99);
+        if (uTex < 0.5) {   // la sfumatura del Mostro 2D: chiaro in alto, più scuro in basso, riflesso in alto a sinistra
+          vec3 c = t < 0.5 ? mix(mix(base, vec3(1.0), 0.3), base, t * 2.0) : mix(base, base * 0.8, (t - 0.5) * 2.0);
+          vec2 h = (q - vec2(-0.24, 0.33)) / vec2(0.26, 0.08); if (uMode > 0.5) c = mix(c, vec3(1.0), 0.3 * smoothstep(1.0, 0.6, length(h)));
+          return c;
+        }
+        if (uTex < 1.5) {   // i colori della sfera, in 2D: cinque macchie che girano lente su un fondo blu
+          vec3 cols[5] = vec3[5](vec3(1.0, 0.36, 0.62), vec3(0.62, 0.36, 1.0), vec3(0.25, 0.55, 1.0), vec3(0.2, 0.9, 0.95), vec3(1.0, 0.55, 0.35));
+          vec3 acc = cols[2] * 0.15; float ws = 0.15;
+          for (int k = 0; k < 5; k++) { float a = uTime * 0.7 + float(k) * 1.26;
+            vec2 c = vec2(0.42 * cos(a * (1.0 + float(k) * 0.13)), 0.26 * sin(a * 1.1));
+            float w = exp(-dot(q - c, q - c) / 0.05); acc += cols[k] * w; ws += w; }
+          return acc / ws;
+        }
+        if (uTex < 2.5) {   // retino a puntini: puntini grigi che crescono verso il basso, come un'ombra stampata
+          float g = uMode < 0.5 ? 26.0 : 18.0; vec2 cellp = fract(q * g) - 0.5;
+          float r = mix(0.1, 0.46, t);
+          return length(cellp) < r ? vec3(0.62, 0.66, 0.78) : base;
+        }
+        // carta: crema con la grana
+        float n = hash(floor(q * 260.0)) * 0.6 + hash(floor(q * 60.0)) * 0.4;
+        return vec3(0.98, 0.94, 0.86) * (0.93 + 0.08 * n);
+      }
+    ` + sh.fragmentShader.replace('vec4 diffuseColor = vec4( diffuse, opacity );',
+        'vec4 diffuseColor = vec4( flat2d((gl_FragCoord.xy - uRect.xy) / uRect.zw), opacity );');
+  };
+  return m;
+}
+function sphereMaterial() {
+  const m = new THREE.MeshPhysicalMaterial({ roughness: 0.4, clearcoat: 0.45, clearcoatRoughness: 0.2, envMapIntensity: 0.4 });   // riflessi bassi: colori accesi come la sfera di Siigil
+  m.userData.u = { uTime: { value: 0 }, uCols: { value: PALETTES.lavora.map(c => new THREE.Color(...c)) } };
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, m.userData.u);
+    sh.vertexShader = 'varying vec3 vObj;\n' + sh.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n vObj = transformed;');
+    sh.fragmentShader = 'varying vec3 vObj;\nuniform float uTime;\nuniform vec3 uCols[5];\n' + sh.fragmentShader
+      .replace('vec4 diffuseColor = vec4( diffuse, opacity );', `
+        vec3 acc = uCols[2] * 0.02; float ws = 0.02;
+        for (int k = 0; k < 5; k++) { float a = uTime * 0.7 + float(k) * 1.26;
+          vec3 c = vec3(0.34 * cos(a * (1.0 + float(k) * 0.13)), 0.5 + 0.3 * sin(a * 1.1), 0.28 * sin(a * 0.9 + float(k)));
+          float w = exp(-dot(vObj - c, vObj - c) / 0.035); acc += uCols[k] * w; ws += w; }   // macchie distinte: ogni zona ha il suo colore
+        vec3 col = acc / ws; col = mix(vec3(dot(col, vec3(0.3, 0.59, 0.11))), col, 1.35);   // un po' più saturo
+        vec4 diffuseColor = vec4(clamp(col, 0.0, 1.0), opacity);`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n totalEmissiveRadiance += diffuseColor.rgb * 0.22;');
+  };
+  return m;
+}
+// Contorno grigio come in Siigil (solo per "toon"): il corpo stesso, gonfiato lungo le normali e visto da dietro.
+function outlineMaterial() {
+  const m = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.62, 0.62, 0.64), side: THREE.BackSide });
+  m.onBeforeCompile = s => { s.vertexShader = s.vertexShader.replace('#include <skinning_vertex>', '#include <skinning_vertex>\n transformed += normalize(objectNormal) * 0.022;'); };
+  return m;
+}
+const EYE_MAT = new THREE.MeshBasicMaterial({ color: INK });
+const EYE_LIGHT = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.96, 0.96, 1) });   // occhi chiari sui corpi scuri   // niente occhi lucidi: inchiostro piatto
+
+function canvasTexture(draw, size = 128) {
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  draw(c.getContext('2d'), size); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+const SHADOW_TEX = canvasTexture((g, s) => {
+  const r = g.createRadialGradient(s/2, s/2, 0, s/2, s/2, s/2); r.addColorStop(0, 'rgba(0,0,0,.55)'); r.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = r; g.fillRect(0, 0, s, s);
+});
+const Z_TEX = canvasTexture((g, s) => { g.fillStyle = 'rgb(178,204,255)'; g.font = `bold ${s * 0.8}px ui-rounded, system-ui, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('z', s/2, s/2); });
+const STAR_TEX = canvasTexture((g, s) => {
+  const c = s / 2, r = s * 0.48, k = r * 0.24;
+  g.fillStyle = 'rgb(255,217,89)'; g.beginPath(); g.moveTo(c, c - r);
+  g.quadraticCurveTo(c + k, c - k, c + r, c); g.quadraticCurveTo(c + k, c + k, c, c + r);
+  g.quadraticCurveTo(c - k, c + k, c - r, c); g.quadraticCurveTo(c - k, c - k, c, c - r); g.fill();
+});
+
+// ---------- Il Mostro: corpo con tre ossa, occhi a barretta appoggiati alla superficie, aggiunte ----------
+const EYE_H = 0.64 * H, EYE_X = 0.25 * 84 / 62, LEG = 0.12;   // come il prototipo: occhi al 36 % dall'alto, ognuno a 0,25 della larghezza dal centro
+class Mostro {
+  constructor({ finish = 'vinile', soft = true, arms = false, legs = false, onlyOpenEyes = false, shape = null, color = WHITE, outline = null, tex = null, texMode = 'fermo' } = {}) {
+    this.soft = soft; this.legs = legs; this.shape = shapeOf(shape); const SH = this.shape;
+    this.group = new THREE.Group();
+    const bones = ['radice', 'corpo', 'cima'].map(n => { const b = new THREE.Bone(); b.name = n; return b; });
+    [this.root, this.mid, this.top] = bones;
+    this.mid.position.y = SH.bones[0]; this.top.position.y = SH.bones[1] - SH.bones[0];   // Mostro: corpo al 32 %, cima al 62 % dell'altezza
+    this.root.add(this.mid); this.mid.add(this.top);
+    this.mat = tex ? clipMaterial(tex, texMode) : bodyMaterial(finish, color); this.base = color; this.sphere = finish === 'sfera'; this.tex = !!tex;
+    this.body = new THREE.SkinnedMesh(SH.geo, this.mat);
+    this.body.name = 'mostro'; this.body.frustumCulled = false;
+    this.body.add(this.root);
+    this.group.add(this.body);
+    this.body.updateMatrixWorld(true);
+    this.skeleton = new THREE.Skeleton(bones);
+    this.body.bind(this.skeleton);
+    if (outline ?? finish === 'toon') {
+      const o = new THREE.SkinnedMesh(SH.geo, outlineMaterial()); o.frustumCulled = false;
+      this.group.add(o); o.bind(this.skeleton, this.body.bindMatrix);
+    }
+    // occhi: figli della cima, così seguono il corpo; tre forme per occhio (aperto, chiuso ∪, felice ∩)
+    const eyeMat = !tex && finish !== 'sfera' && 0.3 * color.r + 0.59 * color.g + 0.11 * color.b < 0.35 ? EYE_LIGHT : EYE_MAT;
+    this.eyes = new THREE.Group(); this.eyes.name = 'occhi'; this.top.add(this.eyes);
+    this.eyes.position.y = SH.eyeH - SH.bones[1];
+    this.eyeParts = [-1, 1].map(s => {
+      const e = new THREE.Group(); this.eyes.add(e);
+      const open = new THREE.Mesh(new THREE.CapsuleGeometry(0.046, 0.12, 6, 12), eyeMat); open.scale.z = 0.45; e.add(open);
+      const arc = new THREE.TorusGeometry(0.085, 0.022, 8, 24, PI);
+      const closed = new THREE.Mesh(arc, eyeMat); closed.rotation.z = PI; closed.scale.set(1, 0.6, 0.8); closed.position.set(0, 0.03, 0.016);
+      const happy = new THREE.Mesh(arc, eyeMat); happy.scale.set(1, 0.7, 0.8); happy.position.set(0, -0.03, 0.016);
+      if (!onlyOpenEyes) { e.add(closed); e.add(happy); }
+      return { s, e, open, closed, happy };
+    });
+    if (arms) {   // due braccini, col perno sulla spalla (seguono il corpo: sono figli del suo osso centrale)
+      const r = SH.width(0.55 * SH.H);
+      this.armParts = [1, -1].map(s => { const g = new THREE.Group(); g.name = s > 0 ? 'braccio_dx' : 'braccio_sx'; this.mid.add(g); g.position.set(s * r * 0.92, 0.55 * SH.H - SH.bones[0], 0);
+        const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.16, 6, 12), this.mat); m.position.x = s * 0.13; m.rotation.z = PI / 2; g.add(m); return { s, g }; });
+    }
+    if (legs) {   // due gambette appese alla base del corpo, fino a terra: saltano e camminano con lui
+      this.legParts = [1, -1].map(s => { const g = new THREE.Group(); g.name = s > 0 ? 'gamba_dx' : 'gamba_sx'; this.root.add(g); g.position.set(s * 0.18, 0.06, 0);
+        const m = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.07, 6, 12), this.mat); m.position.y = -0.07; g.add(m); return { s, g }; });
+    }
+    this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.1), new THREE.MeshBasicMaterial({ map: SHADOW_TEX, transparent: true, depthWrite: false }));
+    this.shadow.rotation.x = -PI / 2; this.shadow.position.y = 0.002; this.group.add(this.shadow);
+    this.zs = [0, 1].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: Z_TEX, transparent: true, depthWrite: false })); this.group.add(s); return s; });
+    this.stars = [0, 1, 2, 3].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: STAR_TEX, transparent: true, depthWrite: false })); this.group.add(s); return s; });
+    this.spring = { v: 0, vv: 0, l: 0, lv: 0, w: 0, wv: 0 };   // molle del corpo morbido: alto/basso, piega, torsione
+    this.last = null;
+  }
+
+  // Una posa per istante: il movimento la calcola, qui diventa ossa, occhi, colore, decorazioni.
+  apply(p, t, dt) {
+    const lift = (p.lift ?? 0) + (this.legs ? LEG : 0), sy = p.sy ?? 1, sxz = p.sxz ?? 1, yaw = p.yaw ?? 0;
+    const leanZ = p.leanZ ?? 0, leanX = p.leanX ?? 0;
+    this.root.position.y = lift; this.root.scale.set(sxz, sy, sxz);
+    this.mid.scale.set(1, 1, 1); this.mid.rotation.set(0, 0, 0); this.top.rotation.set(0, 0, 0); this.top.scale.set(1, 1, 1);
+    if (!this.soft) {
+      this.root.rotation.set(leanX, yaw, leanZ);
+    } else {
+      // il corpo morbido: la cima insegue la base con un po' di ritardo e rimbalza (molle smorzate)
+      const S = this.spring, h = Math.max(0, Math.min(dt, 1 / 30));
+      for (let k = 0; k < 4; k++) {
+        const d = h / 4;
+        S.vv += (170 * (lift - S.v) - 9 * S.vv) * d; S.v += S.vv * d;
+        S.lv += (120 * (leanZ - S.l) - 7 * S.lv) * d; S.l += S.lv * d;
+        S.wv += (110 * (yaw - S.w) - 8 * S.wv) * d; S.w += S.wv * d;
+      }
+      const dev = Math.max(Math.min(S.v - lift, 0.08), -0.08);
+      const stretch = 1 + dev * 1.5;
+      const twist = Math.max(Math.min(S.w - yaw, 0.3), -0.3);
+      this.mid.scale.set(1 / Math.sqrt(stretch), stretch, 1 / Math.sqrt(stretch));
+      this.root.rotation.set(leanX * 0.4, yaw, S.l * 0.35);
+      this.mid.rotation.set(leanX * 0.3, twist * 0.45, S.l * 0.35);
+      this.top.rotation.set(leanX * 0.3, twist * 0.55, S.l * 0.3);
+    }
+    // occhi: larghi sempre uguali (si annulla lo schiacciamento in larghezza), lo sguardo scivola sulla superficie
+    this.group.updateMatrixWorld(true);
+    const ws = new THREE.Vector3(); this.top.getWorldScale(ws);
+    const blink = p.blink ? (() => { const q = phase(t, p.blink) * p.blink; return q < 0.12 ? Math.max(0.08, Math.abs(q - 0.06) / 0.06) : 1; })() : 1;
+    for (const E of this.eyeParts) {
+      const x = E.s * this.shape.eyeX + (p.look ?? 0) * 0.07, o = this.shape.surface(x, this.shape.eyeH);
+      E.e.position.set(x, 0, o.z - 0.012); E.e.rotation.set(o.pitch, o.yaw, 0); E.e.scale.set(1 / ws.x, 1 / ws.y, 1);
+      const mode = p.eyes ?? 'open';
+      E.open.visible = mode === 'open'; E.open.scale.y = blink;
+      E.closed.visible = mode === 'closed'; E.happy.visible = mode === 'happy';
+    }
+    if (this.sphere) {   // i colori scorrono; al cambio di stato sfumano verso la tavolozza del nuovo stato
+      const u = this.mat.userData.u, k = this.palReady ? 1 - Math.exp(-dt * 2.5) : 1, to = PALETTES[p.mood ?? 'lavora']; this.palReady = true;   // la prima volta parte già coi colori del suo stato
+      u.uTime.value = t; u.uCols.value.forEach((c, i) => c.lerp(new THREE.Color(...to[i]), k));
+    } else if (!this.tex) this.mat.color.copy(p.red ? RED : this.base);
+    // braccia: "su" (0 = di lato, positivo in alto) e "avanti"; gambe: oscillazione e sollevamento
+    if (this.armParts) for (const A of this.armParts) { const P = (A.s > 0 ? p.armR : p.armL) ?? {}; A.g.rotation.set(0, -A.s * (P.fwd ?? 0.1), A.s * (P.up ?? -1.1)); }
+    if (this.legParts) for (const L of this.legParts) { const P = (L.s > 0 ? p.legR : p.legL) ?? {}; L.g.rotation.x = P.swing ?? 0; L.g.position.y = 0.06 + (P.lift ?? 0); }
+    const air = Math.max(lift - (this.legs ? LEG : 0), 0);
+    this.shadow.scale.setScalar(1 - air * 1.6); this.shadow.material.opacity = 1 - air * 2.5;
+    this.zs.forEach((s, k) => {
+      const q = phase(t + k * 1.8, 3.6); s.visible = !!p.z;
+      s.position.set(0.42 + 0.22 * q, this.shape.H * sy + 0.05 + 0.45 * q, 0.1); s.scale.setScalar(0.13 + 0.12 * q); s.material.opacity = Math.sin(PI * q);
+    });
+    const spots = [[-0.62, 0.95], [0.62, 1.05], [0.72, 0.55], [-0.74, 0.45]];
+    const q = phase(t, 1.2), sp = q > 0.2 ? (q - 0.2) / 0.6 : 0;
+    this.stars.forEach((s, k) => {
+      const qq = Math.min(1, sp * 1.4 - k * 0.08); s.visible = !!p.stars && qq > 0;
+      s.position.set(spots[k][0], spots[k][1], 0.1); s.scale.setScalar(0.2 * Math.sin(PI * Math.max(qq, 0)) + 0.001);
+    });
+  }
+}
+
+// ---------- I movimenti: gli stati di Siigil, con gli stessi tempi del prototipo (giri da 2,4 e 3,6 s) ----------
+function hop(t, period, height = 0.16) {
+  const q = phase(t, period); let sy = 1, sxz = 1, lift = 0;
+  if (q < 0.14) { const k = ease(q / 0.14); sy = 1 - 0.14 * k; sxz = 1 + 0.08 * k; }
+  else if (q < 0.56) { const k = (q - 0.14) / 0.42; lift = height * Math.sin(PI * k); sy = 1.06 - 0.06 * k; sxz = 0.96 + 0.04 * k; }
+  else if (q < 0.72) { const k = (q - 0.56) / 0.16; sy = 1 - 0.1 * Math.sin(PI * k); sxz = 1 + 0.07 * Math.sin(PI * k); }
+  return { sy, sxz, lift };
+}
+const reading = t => { const l = phase(t, 2.4); return l < 0.8 ? -0.8 + 1.6 * (l / 0.8) : 0.8 - 1.6 * ((l - 0.8) / 0.2); };
+const MOTIONS = {
+  dorme: t => { const br = Math.sin(2 * PI * t / 3.6); return { sy: 1 + 0.025 * br, sxz: 1 - 0.012 * br, eyes: 'closed', z: true, mood: 'dorme' }; },
+  legge: t => ({ eyes: 'open', look: reading(t), leanZ: Math.sin(2 * PI * t / 2.4) * 0.025, blink: 2.4, mood: 'lavora' }),
+  aspetta: t => { const q = phase(t, 2.4); const k = q < 0.3 ? ease(q / 0.3) : q < 0.6 ? 1 : 1 - ease((q - 0.6) / 0.4); return { eyes: 'open', leanX: 0.09 * k, blink: 2.4, mood: 'aspetta' }; },
+  finito: t => ({ ...hop(t, 1.2), eyes: 'happy', stars: true, mood: 'finito' }),
+  allarme: t => ({ ...hop(t, 0.6, 0.06), eyes: 'open', red: true, look: Math.sin(2 * PI * t / 0.6) * 0.8, mood: 'aspetta' }),
+  ciclo: t => { const m = ['dorme', 'legge', 'aspetta', 'finito'][Math.floor(t / 3.6) % 4]; return MOTIONS[m](t); },   // gli stati in fila
+  saluta: t => { const q = phase(t, 2.4); const up = q < 0.15 ? ease(q / 0.15) : q < 0.75 ? 1 : 1 - ease((q - 0.75) / 0.25);
+    return { eyes: 'happy', armR: { up: -1.1 + up * (2.5 + 0.35 * Math.sin(2 * PI * t / 0.4)), fwd: 0.15 }, leanZ: -0.03 * up, mood: 'finito' }; },
+  cammina: t => { const s = 2 * PI * t / 1.2, w = Math.sin(s), c = Math.cos(s);
+    return { eyes: 'open', blink: 2.4, lift: Math.abs(w) * 0.02, leanZ: w * 0.05, mood: 'lavora',
+      legR: { swing: 0.45 * w, lift: Math.max(0, -c) * 0.04 }, legL: { swing: -0.45 * w, lift: Math.max(0, c) * 0.04 },
+      armR: { up: -1.0, fwd: 0.5 * w }, armL: { up: -1.0, fwd: -0.5 * w } }; },
+  corre: t => { const s = 2 * PI * t / 0.6, w = Math.sin(s), c = Math.cos(s);
+    return { eyes: 'open', lift: Math.abs(w) * 0.045, leanX: 0.13, leanZ: w * 0.03, mood: 'lavora',
+      legR: { swing: 0.8 * w, lift: Math.max(0, -c) * 0.07 }, legL: { swing: -0.8 * w, lift: Math.max(0, c) * 0.07 },
+      armR: { up: -0.45, fwd: 0.9 * w }, armL: { up: -0.45, fwd: -0.9 * w } }; },
+  festeggia: t => { const wave = 0.25 * Math.sin(2 * PI * t / 0.3);
+    return { ...hop(t, 1.2), eyes: 'happy', stars: true, mood: 'finito', armR: { up: 1.15 + wave, fwd: 0.2 }, armL: { up: 1.15 - wave, fwd: 0.2 } }; },
+  balla: t => { const s = 2 * PI * t / 1.2, w = Math.sin(s);
+    return { eyes: 'happy', mood: 'finito', leanZ: 0.14 * w, yaw: 0.25 * Math.sin(s / 2), lift: Math.abs(w) * 0.015,
+      armR: { up: 0.1 + 0.9 * w, fwd: 0.2 }, armL: { up: 0.1 - 0.9 * w, fwd: 0.2 },
+      legR: { lift: Math.max(0, w) * 0.05 }, legL: { lift: Math.max(0, -w) * 0.05 } }; },
+  indica: t => { const q = phase(t, 2.4), k = q < 0.25 ? ease(q / 0.25) : q < 0.85 ? 1 : 1 - ease((q - 0.85) / 0.15);
+    return { eyes: 'open', blink: 2.4, look: 0.8 * k, yaw: 0.25 * k, mood: 'aspetta',
+      armR: { up: -1.1 + 1.3 * k, fwd: 0.9 * k + 0.06 * k * Math.sin(2 * PI * t / 0.5) } }; },
+  stiracchia: t => { const q = phase(t, 3.6), k = q < 0.35 ? ease(q / 0.35) : q < 0.65 ? 1 : 1 - ease((q - 0.65) / 0.35);
+    return { eyes: k > 0.4 ? 'closed' : 'open', sy: 1 + 0.08 * k, sxz: 1 - 0.04 * k, mood: 'dorme',
+      armR: { up: -1.1 + 2.5 * k, fwd: 0.05 }, armL: { up: -1.1 + 2.5 * k, fwd: 0.05 } }; },
+  gira: t => { const q = phase(t, 3.6); const target = q < 0.5 ? 0.9 : -0.9, k = ease((q % 0.5) / 0.18);
+    return { eyes: 'open', yaw: q < 0.5 ? -0.9 + 1.8 * k : 0.9 - 1.8 * k, blink: 2.4, mood: 'lavora' }; },
+};
+
+// ---------- La scena a due: il Mostro dorme, arriva Mirtillo, si salutano, si battono il cinque, festeggiano, si
+// abbracciano, si salutano; Mirtillo se ne va e il Mostro torna a dormire. Un giro di 10 s che si chiude. ----------
+function duet(t) {
+  const T = phase(t, 10) * 10, seg = (a, b) => Math.min(Math.max((T - a) / (b - a), 0), 1);
+  const walk = (tt, yaw) => ({ ...MOTIONS.cammina(tt), yaw });
+  const wave = (arm, yaw, look, from) => ({ eyes: 'happy', yaw, look,
+    [arm]: { up: -1.1 + (2.4 + 0.3 * Math.sin(2 * PI * T / 0.4)) * ease(seg(from, from + 0.25)), fwd: 0.15 } });
+  const five = (arm, yaw, look) => ({ eyes: 'happy', yaw: yaw * 0.6, look, [arm]: { up: -1.1 + 2.5 * ease(seg(5.0, 5.25)), fwd: 0.55 * ease(seg(5.0, 5.25)) } });   // in alto e un po' verso di noi, così il cinque si vede
+  const hug = (side, yaw) => { const u = ease(seg(7.2, 7.6)) * (1 - ease(seg(8.1, 8.4)));
+    return { eyes: 'happy', yaw, leanZ: -side * 0.16 * u, armR: { up: -0.6, fwd: 0.8 * u }, armL: { up: -0.6, fwd: 0.8 * u } }; };
+  let A, B, ax = -0.75, bx = 0.75;
+  // A, il Mostro bianco, a sinistra
+  if (T < 2.4) { A = { ...MOTIONS.dorme(T), yaw: 0.3 }; ax = -1.05; }
+  else if (T < 3.0) { A = { ...(T > 2.55 ? hop(T - 2.55, 0.45, 0.07) : {}), eyes: 'open', yaw: 0.3 + 0.4 * ease(seg(2.4, 2.9)), look: 0.6 }; ax = -1.05; }
+  else if (T < 4.2) { A = wave('armR', 0.7, 0.5, 3.0); ax = -1.05; }
+  else if (T < 5.0) { A = walk(T, 0.9); ax = -1.05 + 0.3 * seg(4.2, 5.0); }
+  else if (T < 5.5) A = five('armR', 0.7, 0.5);
+  else if (T < 7.2) A = { ...MOTIONS.festeggia(T - 5.5), yaw: 0.5 };
+  else if (T < 8.4) A = hug(1, 0.6);
+  else if (T < 9.0) A = wave('armR', 0.6, 0.6, 8.4);
+  else if (T < 9.6) { A = walk(T, -0.4); ax = -0.75 - 0.3 * seg(9.0, 9.6); }
+  else { A = { ...MOTIONS.dorme(T), yaw: 0.3 * seg(9.6, 10) }; ax = -1.05; }
+  // B, Mirtillo, arriva da destra
+  if (T < 2.0) { B = walk(T, -1.1); bx = 2.6 - 1.55 * seg(0, 2.0); }
+  else if (T < 2.4) { B = wave('armL', -0.7, -0.5, 2.0); bx = 1.05; }
+  else if (T < 3.0) { B = { ...hop(T - 2.4, 0.6, 0.06), eyes: 'happy', yaw: -0.7, look: -0.5 }; bx = 1.05; }
+  else if (T < 4.2) { B = wave('armL', -0.7, -0.5, 3.0); bx = 1.05; }
+  else if (T < 5.0) { B = walk(T + 0.6, -0.9); bx = 1.05 - 0.3 * seg(4.2, 5.0); }
+  else if (T < 5.5) B = five('armL', -0.7, -0.5);
+  else if (T < 7.2) B = { ...MOTIONS.festeggia(T - 5.5 + 0.42), yaw: -0.5 };   // salti alternati
+  else if (T < 8.4) B = hug(-1, -0.6);
+  else if (T < 9.0) B = wave('armL', -0.6, -0.6, 8.4);
+  else { B = walk(T, 1.1); bx = 0.75 + 1.85 * seg(9.0, 10.0); }
+  return { A, B, ax, bx, burst: T >= 5.2 && T < 5.9 ? seg(5.2, 5.9) : -1 };
+}
+// ---------- Views: one WebGL renderer draws every cell (one scene, camera and mascot per cell) ----------
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 700 ? 1.5 : 2));
+renderer.setScissorTest(true);
+renderer.toneMapping = THREE.NeutralToneMapping;
+const ENV = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const views = [];
+function stage() {
+  const scene = new THREE.Scene(); scene.environment = ENV;
+  const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(-2, 3, 2.5); scene.add(key);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x404050, 0.6));
+  return scene;
+}
+function camera(el, cam, target, { interactive = true, spin = false } = {}) {
+  const c = new OrbitControls(cam, el); c.target.set(...target); c.enablePan = false; c.enableZoom = false;
+  c.autoRotate = spin; c.autoRotateSpeed = 1.6; c.enabled = interactive; c.update();
+  if (!interactive) el.style.touchAction = 'pan-y';   // gallery cells must not block page scrolling on phones
+  return c;
+}
+function addScene(el) {
+  const scene = stage();
+  const A = new Mostro({ arms: true, legs: true }), B = new Mostro({ shape: 'quadrato', color: BLUE, arms: true, legs: true });
+  scene.add(A.group, B.group);
+  const burst = [0, 1, 2, 3, 4, 5].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: STAR_TEX, transparent: true, depthWrite: false })); scene.add(s); return s; });
+  const cam = new THREE.PerspectiveCamera(30, 1.8, 0.1, 30); cam.position.set(0, 1.05, 4.7);
+  views.push({ el, scene, cam, controls: camera(el, cam, [0, 0.6, 0]), m: A, update(t, dt) {
+    const d = duet(t);
+    A.group.position.x = d.ax; B.group.position.x = d.bx;
+    A.apply(d.A, t, dt); B.apply(d.B, t, dt);
+    burst.forEach((s, k) => { s.visible = d.burst >= 0; const a = k / 6 * 2 * PI, r = 0.12 + 0.4 * d.burst;
+      s.position.set(Math.cos(a) * r, 1.12 + Math.sin(a) * r * 0.8, 0.45); s.scale.setScalar(0.2 * Math.sin(PI * Math.max(d.burst, 0)) + 0.001); });
+  } });
+}
+function addView(el, opts, motion, view = {}) {
+  const scene = stage(), m = new Mostro(opts); scene.add(m.group);
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20); cam.position.set(1.2, 1.05, 3.1);
+  const v = { el, scene, cam, controls: camera(el, cam, [0, 0.5, 0], view), m, motion: MOTIONS[motion] };
+  views.push(v); return v;
+}
+
+// ---------- The configurator ----------
+const SWATCHES = [['White', [0.96, 0.97, 0.99]], ['Lemon', [1, 0.85, 0.32]], ['Peach', [1, 0.7, 0.56]], ['Strawberry', [0.95, 0.45, 0.52]],
+  ['Lavender', [0.8, 0.74, 0.98]], ['Blueberry', [0.45, 0.62, 0.98]], ['Mint', [0.56, 0.9, 0.74]], ['Sage', [0.62, 0.78, 0.5]],
+  ['Biscuit', [0.9, 0.77, 0.6]], ['Night blue', [0.24, 0.32, 0.66]], ['Charcoal', [0.2, 0.2, 0.24]]];
+const SHAPES = [['mostro', 'Monster'], ['quadrato', 'Soft square'], ['capsula', 'Capsule'], ['goccia', 'Drop'], ['dolcetto', 'Gumdrop'],
+  ['nuvoletta', 'Cloud'], ['cuore', 'Heart'], ['fantasmino', 'Ghost']];
+const FINISHES = [['vinile', 'Vinyl', { finish: 'vinile' }], ['lucida', 'Glossy', { finish: 'lucida' }], ['gommoso', 'Soft-touch', { finish: 'gommoso' }],
+  ['piatta', 'Flat', { finish: 'piatto', outline: true }], ['duetoni', 'Two-tone', { finish: 'duetoni', outline: true }],
+  ['sfera', 'Color flow', { finish: 'sfera' }], ['puntini', 'Cut-out dots', { tex: 'puntini', texMode: 'segue', outline: true }],
+  ['flusso', 'Cut-out color', { tex: 'sfera', texMode: 'segue' }]];
+const MOVES = [['dorme', 'Sleep'], ['legge', 'Read'], ['aspetta', 'Wait'], ['finito', 'Hop'], ['gira', 'Turn'], ['allarme', 'Alarm'],
+  ['saluta', 'Wave', 'a'], ['cammina', 'Walk', 'al'], ['corre', 'Run', 'al'], ['festeggia', 'Celebrate', 'a'], ['balla', 'Dance', 'al'],
+  ['indica', 'Point', 'a'], ['stiracchia', 'Stretch', 'a']];
+const LOOP = { dorme: 3.6, gira: 3.6, stiracchia: 3.6 };   // other moves loop every 2.4 s (or a divisor of it)
+const state = { shape: 'mostro', color: 0, finish: 'vinile', arms: true, legs: true, move: 'saluta' };
+const recipe = (forExport = false) => {
+  const f = FINISHES.find(x => x[0] === state.finish)[2];
+  const plain = forExport && (f.tex || f.finish === 'sfera');   // shader finishes export as vinyl
+  return { ...(plain ? { finish: 'vinile' } : f), shape: state.shape === 'mostro' ? null : state.shape,
+    color: new THREE.Color(...SWATCHES[state.color][1]), arms: state.arms, legs: state.legs };
+};
+let cfg;
+function rebuild() {
+  cfg.scene.remove(cfg.m.group); cfg.m = new Mostro(recipe()); cfg.scene.add(cfg.m.group);
+  cfg.motion = MOTIONS[state.move]; sync();
+}
+function chips(id, items, key) {
+  const box = document.getElementById(id);
+  for (const [value, label] of items) {
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = label; b.dataset.value = value;
+    b.onclick = () => { state[key] = value; const need = MOVES.find(m => m[0] === value)?.[2];
+      if (key === 'move' && need) { if (need.includes('a')) state.arms = true; if (need.includes('l')) state.legs = true; }
+      rebuild(); };
+    box.append(b);
+  }
+}
+function sync() {
+  for (const [id, key] of [['shapes', 'shape'], ['finishes', 'finish'], ['moves', 'move']])
+    for (const b of document.getElementById(id).children) b.setAttribute('aria-pressed', b.dataset.value === state[key]);
+  [...document.getElementById('colors').children].forEach((b, i) => b.setAttribute('aria-pressed', i === state.color));
+  document.getElementById('arms').checked = state.arms; document.getElementById('legs').checked = state.legs;
+  const f = FINISHES.find(x => x[0] === state.finish)[2];
+  document.getElementById('colors').classList.toggle('muted', !!(f.tex || f.finish === 'sfera'));
+}
+function buildConfigurator() {
+  cfg = addView(document.getElementById('cfg-view'), recipe(), state.move);
+  chips('shapes', SHAPES, 'shape'); chips('finishes', FINISHES, 'finish'); chips('moves', MOVES, 'move');
+  const colors = document.getElementById('colors');
+  SWATCHES.forEach(([name, c], i) => {
+    const b = document.createElement('button'); b.className = 'swatch'; b.title = name; b.setAttribute('aria-label', name);
+    b.style.background = `rgb(${c.map(v => Math.round(v * 255)).join(',')})`; b.onclick = () => { state.color = i; rebuild(); }; colors.append(b);
+  });
+  for (const k of ['arms', 'legs']) document.getElementById(k).onchange = e => { state[k] = e.target.checked; rebuild(); };
+  document.getElementById('random').onclick = () => {
+    const pick = a => a[Math.floor(Math.random() * a.length)];
+    Object.assign(state, { shape: pick(SHAPES)[0], color: Math.floor(Math.random() * SWATCHES.length), finish: pick(FINISHES)[0], move: pick(MOVES)[0] });
+    const need = MOVES.find(m => m[0] === state.move)[2] ?? ''; state.arms = need.includes('a') || Math.random() < 0.5; state.legs = need.includes('l') || Math.random() < 0.4;
+    rebuild();
+  };
+  document.getElementById('download').onclick = downloadGLB;
+  if (new URLSearchParams(location.search).has('selftest')) downloadGLB();   // check the export without clicking
+  sync();
+}
+
+// ---------- .glb download: body, eyes, arms and legs, skeleton, and two baked moves (idle + the chosen one) ----------
+function bake(m, motion, name, seconds) {
+  const fpsB = 30, times = [];
+  const nodes = [[m.root, ['position', 'scale', 'quaternion']], [m.mid, ['scale', 'quaternion']], [m.top, ['quaternion']],
+    ...(m.armParts ?? []).map(a => [a.g, ['quaternion']]), ...(m.legParts ?? []).map(l => [l.g, ['quaternion', 'position']])];
+  const data = nodes.map(([, props]) => props.map(() => []));
+  for (let i = 0; i < 90; i++) m.apply(motion(i / 60), i / 60, 1 / 60);   // let the soft-body springs settle
+  for (let i = 0; i <= seconds * fpsB; i++) {
+    const t = i / fpsB; m.apply(motion(t), t, 1 / fpsB); times.push(t);
+    nodes.forEach(([o, props], n) => props.forEach((p, k) => data[n][k].push(...o[p].toArray())));
+  }
+  const tracks = [];
+  nodes.forEach(([o, props], n) => props.forEach((p, k) =>
+    tracks.push(new (p === 'quaternion' ? THREE.QuaternionKeyframeTrack : THREE.VectorKeyframeTrack)(`${o.name}.${p}`, times, data[n][k]))));
+  return new THREE.AnimationClip(name, seconds, tracks);
+}
+async function downloadGLB() {
+  const btn = document.getElementById('download'), label = btn.textContent; btn.disabled = true; btn.textContent = 'Preparing…';
+  await new Promise(r => setTimeout(r, 30));
+  const m = new Mostro({ ...recipe(true), onlyOpenEyes: true }); m.shadow.visible = false; m.zs.concat(m.stars).forEach(s => m.group.remove(s));
+  const move = MOVES.find(x => x[0] === state.move)[1].toLowerCase();
+  const clips = [bake(m, t => ({ ...MOTIONS.dorme(t), eyes: 'open', z: false }), 'idle', 3.6),
+    bake(m, t => ({ ...MOTIONS[state.move](t), eyes: 'open', stars: false, z: false }), move, LOOP[state.move] ?? 2.4)];
+  m.apply({}, 0, 0);
+  const glb = await new GLTFExporter().parseAsync(m.group, { binary: true, animations: clips });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+  a.download = `mascot-${state.shape}-${move}.glb`; a.click();
+  btn.disabled = false; btn.textContent = label;
+  document.getElementById('dl-note').textContent = `Saved ${a.download} (${(glb.byteLength / 1024).toFixed(0)} KB): skeleton, “idle” and “${move}”. Opens in Blender, Godot, Unity or any glTF viewer.`;
+}
+
+// ---------- Build the page ----------
+addScene(document.getElementById('hero-view'));
+buildConfigurator();
+setTimeout(() => {   // the gallery shapes take ~0.1 s each to inflate: build them after the first frame
+  const grid = document.getElementById('gallery-shapes');
+  for (const [shape, label] of SHAPES) {
+    const c = document.createElement('figure'); c.className = 'tile'; c.innerHTML = `<div class="tile-view"></div><figcaption>${label}</figcaption>`; grid.append(c);
+    addView(c.firstChild, { shape: shape === 'mostro' ? null : shape }, 'legge', { interactive: false, spin: true });
+  }
+  const grid2 = document.getElementById('gallery-finishes');
+  for (const [, label, f] of FINISHES) {
+    const c = document.createElement('figure'); c.className = 'tile'; c.innerHTML = `<div class="tile-view"></div><figcaption>${label}</figcaption>`; grid2.append(c);
+    addView(c.firstChild, { ...f }, 'legge', { interactive: false, spin: true });
+  }
+}, 60);
+
+// ---------- The drawing loop ----------
+let last = performance.now();
+const FREEZE = new URLSearchParams(location.search).get('t');   // ?t=1.2 freezes time (for screenshots)
+function loop(now) {
+  const t = FREEZE ? +FREEZE : now / 1000, dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;   // never a negative step: the springs would explode
+  const canvas = renderer.domElement, W = canvas.clientWidth, Hh = canvas.clientHeight;
+  if (canvas.width !== Math.floor(W * renderer.getPixelRatio()) || canvas.height !== Math.floor(Hh * renderer.getPixelRatio())) renderer.setSize(W, Hh, false);
+  renderer.setScissor(0, 0, W, Hh); renderer.clear();
+  for (const v of views) {
+    const r = v.el.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > Hh || r.right < 0 || r.left > W) continue;
+    if (v.update) v.update(t, dt); else v.m.apply(v.motion(t), t, dt);
+    v.controls.update();
+    v.cam.aspect = r.width / r.height; v.cam.updateProjectionMatrix();
+    const y = Hh - r.bottom;
+    if (v.m.tex) {
+      const u = v.m.mat.userData.u, dpr = renderer.getPixelRatio(); v.cam.updateMatrixWorld();
+      u.uRect.value.set(r.left * dpr, y * dpr, r.width * dpr, r.height * dpr); u.uTime.value = t;
+      const cy = v.m.root.position.y + v.m.shape.H * 0.5;
+      const c = new THREE.Vector3(0, cy, 0).applyMatrix4(v.m.group.matrixWorld).project(v.cam), c2 = new THREE.Vector3(0, cy + 1, 0).applyMatrix4(v.m.group.matrixWorld).project(v.cam);
+      u.uAnchor.value.set((c.x + 1) / 2, (c.y + 1) / 2); u.uScale.value = (c2.y - c.y) / 2;
+    }
+    renderer.setViewport(r.left, y, r.width, r.height); renderer.setScissor(r.left, y, r.width, r.height);
+    renderer.render(v.scene, v.cam);
+  }
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
