@@ -899,6 +899,7 @@ renderer.setScissorTest(true);
 renderer.toneMapping = THREE.NeutralToneMapping;
 const ENV = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
 const views = [];
+const FREEZE = new URLSearchParams(location.search).get('t');   // ?t=1.2 freezes time (for screenshots)
 function stage() {
   const scene = new THREE.Scene(); scene.environment = ENV;
   const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(-2, 3, 2.5); scene.add(key);
@@ -925,37 +926,56 @@ function addPaper(el, o) {   // paper style: flat colour, long legs with knees, 
   views.push({ el, scene, cam, controls: camera(el, cam, [0, 0.92, 0], { interactive: false, spin: !!o.spin }), m, move: Paper.MOVES[o.move], t0: o.t0 ?? 0 });
 }
 
-// ---------- Scene: the white Mostro and a paper mascot on long legs. A 10 s loop that closes on itself:
-// the Mostro sleeps, the paper one walks in, they say hi, jump together, celebrate, and it walks off. ----------
-function intro(t) {
-  const T = phase(t, 10) * 10, seg = (a, b) => Math.min(Math.max((T - a) / (b - a), 0), 1), M = Paper.MOVES;
-  const walk = (tt, yaw) => ({ ...MOTIONS.cammina(tt), yaw });
-  const wave = (yaw, from) => ({ eyes: 'happy', yaw, look: 0.5, armR: { up: -1.1 + (2.4 + 0.3 * Math.sin(2 * PI * T / 0.4)) * ease(seg(from, from + 0.25)), fwd: 0.15 } });
-  let A, B, ax = -0.85, bx = 0.85, byaw = -0.45;
-  // A, the Mostro, on the left
-  if (T < 2.6) { A = { ...MOTIONS.dorme(T), yaw: 0.3 }; ax = -1.15; }
-  else if (T < 3.2) { A = { ...(T > 2.75 ? hop(T - 2.75, 0.45, 0.07) : {}), eyes: 'open', yaw: 0.3 + 0.4 * ease(seg(2.6, 3.1)), look: 0.6 }; ax = -1.15; }
-  else if (T < 4.4) { A = wave(0.7, 3.2); ax = -1.15; }
-  else if (T < 5.2) { A = walk(T, 0.9); ax = -1.15 + 0.3 * seg(4.4, 5.2); }
-  else if (T < 5.95) A = { ...hop(T - 5.2, 1.0, 0.18), eyes: 'happy', yaw: 0.6 };   // same take-off and peak as the paper jump
-  else if (T < 7.6) A = { ...MOTIONS.festeggia(T - 5.95), yaw: 0.5 };
-  else if (T < 8.6) A = wave(0.6, 7.6);
-  else if (T < 9.4) { A = walk(T, -0.4); ax = -0.85 - 0.3 * seg(8.6, 9.4); }
-  else { A = { ...MOTIONS.dorme(T), yaw: 0.3 * seg(9.4, 10) }; ax = -1.15; }
-  // B, the paper mascot, walks in from the right
-  if (T < 2.4) { B = M.cammina(T); bx = 3.6 - 2.4 * seg(0, 2.4); byaw = -0.6; }
-  else if (T < 3.2) { B = { ...M.fermo(T), look: -1 }; bx = 1.2; }
-  else if (T < 4.4) { B = { ...M.contento(T), look: -0.6 }; bx = 1.2; }
-  else if (T < 5.2) { B = { ...M.cammina(T), look: -0.6 }; bx = 1.2 - 0.35 * seg(4.4, 5.2); byaw = -0.6; }
-  else if (T < 5.95) B = M.salta((T - 5.2) * 1.6);   // its jump lasts 0.75 s of a 1.6 s loop: sped up to match the Mostro
-  else if (T < 7.6) B = M.balla(T);
-  else if (T < 8.6) B = { ...M.contento(T), look: -0.6 };
-  else { B = M.cammina(T); bx = 0.85 + 2.75 * seg(8.6, 10); byaw = -0.45 + 1.05 * ease(seg(8.6, 8.9)); }
-  return { A, B, ax, bx, byaw, burst: T >= 5.45 && T < 6.1 ? seg(5.45, 6.1) : -1 };
+// ---------- Smooth changes: when a mascot switches move, for BLEND seconds it plays the old and the new one together and
+// slides from one to the other. One rule for every mascot, cushion or paper. ----------
+const BLEND = 0.4;
+// What a pose means when it leaves a part out (the same defaults the two engines use).
+const NEUTRAL = { lift: 0, sy: 1, sxz: 1, sx: 1, yaw: 0, leanZ: 0, leanX: 0, look: 0, rot: 0, crouch: 0, armR: { up: -1.1, fwd: 0.1 }, armL: { up: -1.1, fwd: 0.1 },
+  legR: { swing: 0, lift: 0, dx: 0, up: 0 }, legL: { swing: 0, lift: 0, dx: 0, up: 0 } };
+function mix(a, b, k, base = NEUTRAL) {   // numbers slide; eyes, stars, colours and blink timing switch halfway
+  const out = {};
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    const va = a[key], vb = b[key], n = base?.[key];
+    if (typeof (va ?? vb) === 'object') out[key] = mix(va ?? {}, vb ?? {}, k, n);
+    else if (key !== 'blink' && typeof (va ?? n) === 'number' && typeof (vb ?? n) === 'number') out[key] = (va ?? n) + ((vb ?? n) - (va ?? n)) * k;
+    else out[key] = k < 0.5 ? va : vb;
+  }
+  return out;
 }
-// The same beats as intro(), for the timeline under the viewport.
-const SCRIPT = [['Monster', [[0, 2.6, 'Sleep'], [2.6, 3.2, 'Wake'], [3.2, 4.4, 'Wave'], [4.4, 5.2, 'Walk'], [5.2, 5.95, 'Jump'], [5.95, 7.6, 'Celebrate'], [7.6, 8.6, 'Wave'], [8.6, 9.4, 'Walk'], [9.4, 10, 'Sleep']]],
-  ['Diamond', [[0, 2.4, 'Walk in'], [2.4, 3.2, 'Look'], [3.2, 4.4, 'Happy'], [4.4, 5.2, 'Walk'], [5.2, 5.95, 'Jump'], [5.95, 7.6, 'Dance'], [7.6, 8.6, 'Happy'], [8.6, 10, 'Walk off']]]];
+const blended = (from, to, t0) => t => { const k = smooth(0, BLEND, t - t0); return k >= 1 ? to(t) : mix(from(t), to(t), k); };
+
+// ---------- Scene: the white Mostro and a paper mascot on long legs. A 10 s loop that closes on itself:
+// the Mostro sleeps, the paper one walks in, they say hi, jump together, celebrate, and it walks off.
+// Each character is a list of beats [from, to, name, pose]; the same list draws the timeline. A pose also says where the
+// character stands (x) and, for the paper one, where it faces (turn): they slide like the rest. ----------
+const LENGTH = 10, seg = (T, a, b) => Math.min(Math.max((T - a) / (b - a), 0), 1);
+const waving = (T, yaw) => ({ eyes: 'happy', yaw, look: 0.5, armR: { up: 1.3 + 0.3 * Math.sin(2 * PI * T / 0.4), fwd: 0.15 } });
+const MONSTER = [
+  [0, 2.6, 'Sleep', T => ({ ...MOTIONS.dorme(T), yaw: 0.3, x: -1.15 })],
+  [2.6, 3.2, 'Wake', T => ({ ...(T > 2.75 ? hop(T - 2.75, 0.45, 0.07) : {}), eyes: 'open', yaw: 0.7, look: 0.6, x: -1.15 })],
+  [3.2, 4.4, 'Wave', T => ({ ...waving(T, 0.7), x: -1.15 })],
+  [4.4, 5.2, 'Walk', T => ({ ...MOTIONS.cammina(T), yaw: 0.9, x: -1.15 + 0.3 * seg(T, 4.4, 5.2) })],
+  [5.2, 5.95, 'Jump', T => ({ ...hop(T - 5.2, 1.0, 0.18), eyes: 'happy', yaw: 0.6, x: -0.85 })],   // same take-off and peak as the paper jump
+  [5.95, 7.6, 'Celebrate', T => ({ ...MOTIONS.festeggia(T - 5.95), yaw: 0.5, x: -0.85 })],
+  [7.6, 8.6, 'Wave', T => ({ ...waving(T, 0.6), x: -0.85 })],
+  [8.6, 9.4, 'Walk', T => ({ ...MOTIONS.cammina(T), yaw: -0.4, x: -0.85 - 0.3 * seg(T, 8.6, 9.4) })],
+  [9.4, 10, 'Sleep', T => ({ ...MOTIONS.dorme(T), yaw: 0.3, x: -1.15 })],
+];
+const DIAMOND = [
+  [0, 2.4, 'Walk in', T => ({ ...Paper.MOVES.cammina(T), x: 3.6 - 2.4 * seg(T, 0, 2.4), turn: -0.6 })],
+  [2.4, 3.2, 'Look', T => ({ ...Paper.MOVES.fermo(T), look: -1, x: 1.2, turn: -0.45 })],
+  [3.2, 4.4, 'Happy', T => ({ ...Paper.MOVES.contento(T), look: -0.6, x: 1.2, turn: -0.45 })],
+  [4.4, 5.2, 'Walk', T => ({ ...Paper.MOVES.cammina(T), look: -0.6, x: 1.2 - 0.35 * seg(T, 4.4, 5.2), turn: -0.6 })],
+  [5.2, 5.95, 'Jump', T => ({ ...Paper.MOVES.salta((T - 5.2) * 1.6), x: 0.85, turn: -0.45 })],   // its jump lasts 0.75 s of a 1.6 s loop: sped up to match
+  [5.95, 7.6, 'Dance', T => ({ ...Paper.MOVES.balla(T), x: 0.85, turn: -0.45 })],
+  [7.6, 8.6, 'Happy', T => ({ ...Paper.MOVES.contento(T), look: -0.6, x: 0.85, turn: -0.45 })],
+  [8.6, 10, 'Walk off', T => ({ ...Paper.MOVES.cammina(T), x: 0.85 + 2.75 * seg(T, 8.6, 10), turn: 0.6 })],
+];
+function play(beats, T) {   // the pose at T: during the first BLEND seconds of a beat it slides from the previous one (which keeps playing)
+  const i = beats.findIndex(b => T < b[1]), k = smooth(0, BLEND, T - beats[i][0]), pose = beats[i][3](T);
+  return k >= 1 ? pose : mix(beats[(i + beats.length - 1) % beats.length][3](i ? T : T + LENGTH), pose, k);
+}
+const SCRIPT = [['Monster', MONSTER], ['Diamond', DIAMOND]];
 const clock = { t: 0, playing: true, scrub: false };   // the scene's own time: it can pause and be scrubbed
 const ICON = { play: '<svg viewBox="0 0 16 16"><path d="M5 3.2v9.6L12.6 8z" fill="currentColor"/></svg>',
   pause: '<svg viewBox="0 0 16 16"><path d="M4.5 3.5h2.4v9H4.5zM9.1 3.5h2.4v9H9.1z" fill="currentColor"/></svg>' };
@@ -989,11 +1009,11 @@ function addIntro(el) {
   const burst = [0, 1, 2, 3, 4, 5].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: STAR_TEX, transparent: true, depthWrite: false })); scene.add(s); return s; });
   const cam = new THREE.PerspectiveCamera(30, 2, 0.1, 30); cam.position.set(0, 1.2, 4.6);
   views.push({ el, scene, cam, fit: 2.3, controls: camera(el, cam, [0, 0.78, 0]), m: A, update(t, dt) {
-    const d = intro(t);
-    A.group.position.x = d.ax; B.group.position.x = d.bx; B.group.rotation.y = d.byaw;
-    A.apply(d.A, t, dt); B.apply(d.B, t);
-    burst.forEach((s, k) => { s.visible = d.burst >= 0; const a = k / 6 * 2 * PI, r = 0.12 + 0.4 * d.burst;
-      s.position.set(Math.cos(a) * r, 1.45 + Math.sin(a) * r * 0.8, 0.45); s.scale.setScalar(0.2 * Math.sin(PI * Math.max(d.burst, 0)) + 0.001); });
+    const T = phase(t, LENGTH) * LENGTH, a = play(MONSTER, T), b = play(DIAMOND, T), star = T >= 5.45 && T < 6.1 ? seg(T, 5.45, 6.1) : -1;
+    A.group.position.x = a.x; B.group.position.x = b.x; B.group.rotation.y = b.turn;
+    A.apply(a, t, dt); B.apply(b, t);
+    burst.forEach((s, k) => { s.visible = star >= 0; const an = k / 6 * 2 * PI, r = 0.12 + 0.4 * star;
+      s.position.set(Math.cos(an) * r, 1.45 + Math.sin(an) * r * 0.8, 0.45); s.scale.setScalar(0.2 * Math.sin(PI * Math.max(star, 0)) + 0.001); });
     timeline(t);
   } });
 }
@@ -1021,8 +1041,14 @@ const recipe = (forExport = false) => {
 };
 let cfg;
 function rebuild() {
-  cfg.scene.remove(cfg.m.group); cfg.m = new Mostro(recipe()); cfg.scene.add(cfg.m.group);
-  cfg.motion = MOTIONS[state.move]; sync();
+  cfg.scene.remove(cfg.m.group); cfg.m = new Mostro(recipe()); cfg.scene.add(cfg.m.group); sync();
+}
+const clockNow = () => FREEZE ? +FREEZE : performance.now() / 1000;   // the time the drawing loop gives this view
+function setMove(move) {   // the new move slides in from the current pose; the mascot is rebuilt only if it needs arms or legs it lacks
+  const need = MOVES.find(m => m[0] === move)[2] ?? '', grow = (need.includes('a') && !state.arms) || (need.includes('l') && !state.legs);
+  state.move = move; if (need.includes('a')) state.arms = true; if (need.includes('l')) state.legs = true;
+  cfg.motion = blended(cfg.motion, MOTIONS[move], clockNow());
+  if (grow) rebuild(); else sync();
 }
 function select(id, items, key) {
   const sel = document.getElementById(id);
@@ -1043,9 +1069,9 @@ function buildConfigurator() {
   cfg.cam.position.set(1.9, 1.55, 4.9); cfg.controls.update(); cfg.controls.saveState();   // a big viewport: step back from the tile framing
   select('shape', SHAPES, 'shape'); select('finish', FINISHES, 'finish');
   const moves = document.getElementById('moves');
-  for (const [value, label, need = ''] of MOVES) {
+  for (const [value, label] of MOVES) {
     const b = document.createElement('button'); b.textContent = label; b.dataset.value = value;
-    b.onclick = () => { state.move = value; if (need.includes('a')) state.arms = true; if (need.includes('l')) state.legs = true; rebuild(); };
+    b.onclick = () => setMove(value);
     moves.append(b);
   }
   const colors = document.getElementById('colors');
@@ -1056,9 +1082,10 @@ function buildConfigurator() {
   for (const k of ['arms', 'legs']) document.getElementById(k).onchange = e => { state[k] = e.target.checked; rebuild(); };
   document.getElementById('random').onclick = () => {
     const pick = a => a[Math.floor(Math.random() * a.length)];
-    Object.assign(state, { shape: pick(SHAPES)[0], color: Math.floor(Math.random() * SWATCHES.length), finish: pick(FINISHES)[0], move: pick(MOVES)[0] });
-    const need = MOVES.find(m => m[0] === state.move)[2] ?? ''; state.arms = need.includes('a') || Math.random() < 0.5; state.legs = need.includes('l') || Math.random() < 0.4;
-    rebuild();
+    const move = pick(MOVES)[0], need = MOVES.find(m => m[0] === move)[2] ?? '';
+    Object.assign(state, { shape: pick(SHAPES)[0], color: Math.floor(Math.random() * SWATCHES.length), finish: pick(FINISHES)[0], move,
+      arms: need.includes('a') || Math.random() < 0.5, legs: need.includes('l') || Math.random() < 0.4 });
+    cfg.motion = blended(cfg.motion, MOTIONS[move], clockNow()); rebuild();
   };
   document.getElementById('download').onclick = downloadGLB;
   sync();
@@ -1185,7 +1212,6 @@ openTab(location.hash.slice(1), false);
 
 // ---------- The drawing loop ----------
 let last = performance.now();
-const FREEZE = new URLSearchParams(location.search).get('t');   // ?t=1.2 freezes time (for screenshots)
 function loop(now) {
   const t = FREEZE ? +FREEZE : now / 1000, dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;   // never a negative step: the springs would explode
   const run = clock.playing && !clock.scrub && !FREEZE;
