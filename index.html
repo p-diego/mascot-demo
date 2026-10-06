@@ -4,20 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mascot Generator</title>
-<meta name="description" content="Build a soft 3D mascot from ready-made parts, then let any AI pose and animate it. Early prototype.">
+<meta name="description" content="Build a 3D mascot from ready-made parts, then let any AI pose and animate it. Two styles: soft cushion and paper cut-out on long legs. Early prototype.">
 <style>
-  :root { --bg: #111216; --card: #1a1b21; --line: rgba(255,255,255,.08); --text: #ececf1; --muted: #9a9aa8; --accent: #7aa7ff; }
+  :root { --bg: #111216; --card: #1a1b21; --line: rgba(255,255,255,.08); --text: #ececf1; --muted: #9a9aa8; --accent: #7aa7ff; --paper: #f3f2ee; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
   #gl { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 10; }
   main { max-width: 1120px; margin: 0 auto; padding: 40px 16px 64px; }
   header h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; margin: 0 0 10px; letter-spacing: -0.02em; }
   .badge { display: inline-block; font-size: 12px; font-weight: 600; color: var(--accent); border: 1px solid rgba(122,167,255,.4); border-radius: 999px; padding: 2px 10px; margin-bottom: 14px; }
   header p { color: var(--muted); font-size: clamp(15px, 2vw, 18px); max-width: 700px; margin: 0; }
-  section { margin-top: 44px; }
+  .tabs { display: flex; gap: 4px; margin: 28px 0 0; border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .tabs button { font: inherit; font-weight: 600; color: var(--muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 14px; cursor: pointer; white-space: nowrap; }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  section { margin-top: 28px; }
   h2 { font-size: 20px; margin: 0 0 4px; } .lead { color: var(--muted); margin: 0 0 14px; }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; }
-  #hero-view { width: 100%; height: clamp(260px, 46vw, 470px); touch-action: none; cursor: grab; }
+  .paper-bg { background: var(--paper); border-color: transparent; }
+  #hero-view { width: 100%; height: clamp(280px, 48vw, 480px); touch-action: none; cursor: grab; }
   .configurator { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; }
   #cfg-view { width: 100%; height: 100%; min-height: 420px; touch-action: none; cursor: grab; }
   .controls { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
@@ -34,11 +39,14 @@
   .btn { font: inherit; font-weight: 600; color: var(--text); background: rgba(255,255,255,.1); border: 0; border-radius: 10px; padding: 9px 14px; cursor: pointer; }
   .btn.primary { background: var(--accent); color: #0d1020; } .btn:hover { filter: brightness(1.1); } .btn:disabled { opacity: .6; cursor: progress; }
   #dl-note { color: var(--muted); font-size: 13px; min-height: 1em; margin: 0; }
+  #style-chips { margin-bottom: 14px; }
   .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
   .tile { margin: 0; background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 6px 6px 10px; text-align: center; }
-  .tile-view { width: 100%; aspect-ratio: 1; } .tile figcaption { color: var(--muted); font-size: 13px; }
+  .tile.paper { background: var(--paper); border-color: transparent; } .tile.paper figcaption { color: #6f6d66; }
+  .tile-view { width: 100%; aspect-ratio: 1; } .tile.paper .tile-view { aspect-ratio: 5 / 6; } .tile figcaption { color: var(--muted); font-size: 13px; }
+  #loading { color: var(--muted); font-size: 13px; min-height: 1.2em; margin: 0 0 8px; }
   footer { margin-top: 56px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 18px; }
-  footer p { margin: 0 0 6px; max-width: 760px; }
+  footer p { margin: 0 0 6px; max-width: 760px; } footer a { color: var(--accent); }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   @media (max-width: 880px) { .configurator { grid-template-columns: 1fr; } #cfg-view { height: 380px; min-height: 0; } }
 </style>
@@ -55,17 +63,23 @@
   <header>
     <span class="badge">Early prototype</span>
     <h1>Mascot Generator</h1>
-    <p>Build a soft 3D mascot from ready-made parts. Then let any AI pick it up, pose it and animate it — for videos, games and apps.</p>
+    <p>Build a 3D mascot from ready-made parts. Then let any AI pick it up, pose it and animate it — for videos, games and apps.</p>
   </header>
 
-  <section aria-labelledby="h-scene">
-    <h2 id="h-scene">Two mascots meet</h2>
-    <p class="lead">Same skeleton, same moves: walking, waving, a high five, a little celebration. Drag to look around.</p>
-    <div class="card"><div id="hero-view" role="img" aria-label="Animated scene: a white mascot wakes up, a blue one walks in, they wave, high-five, celebrate and hug."></div></div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-tab="intro" aria-controls="tab-intro">Intro</button>
+    <button role="tab" data-tab="make" aria-controls="tab-make">Make your own</button>
+    <button role="tab" data-tab="styles" aria-controls="tab-styles">Styles</button>
+  </nav>
+
+  <section id="tab-intro" role="tabpanel" hidden>
+    <h2>Two styles, one scene</h2>
+    <p class="lead">The soft cushion and the paper cut-out on long legs, both real 3D: they wake up, say hi, jump together and celebrate. Drag to look around.</p>
+    <div class="card paper-bg"><div id="hero-view" role="img" aria-label="Animated scene: a white cushion mascot wakes up, a black paper mascot on long legs walks in, they wave, jump together, celebrate and say goodbye."></div></div>
   </section>
 
-  <section aria-labelledby="h-make">
-    <h2 id="h-make">Make your own</h2>
+  <section id="tab-make" role="tabpanel" hidden>
+    <h2>Make your own</h2>
     <p class="lead">Pick a shape, a color and a finish, then try the moves. Every move works on every mascot.</p>
     <div class="configurator">
       <div class="card"><div id="cfg-view" role="img" aria-label="Your mascot, animated"></div></div>
@@ -81,21 +95,18 @@
     </div>
   </section>
 
-  <section aria-labelledby="h-shapes">
-    <h2 id="h-shapes">One method, any shape</h2>
-    <p class="lead">Each body is inflated from a flat 2D silhouette, like a cushion. Add a silhouette and you get a new character.</p>
-    <div class="gallery" id="gallery-shapes"></div>
-  </section>
-
-  <section aria-labelledby="h-finishes">
-    <h2 id="h-finishes">Finishes</h2>
-    <p class="lead">From vinyl toy to flat drawing: the cut-out finishes show a flat 2D image through a moving 3D silhouette.</p>
-    <div class="gallery" id="gallery-finishes"></div>
+  <section id="tab-styles" role="tabpanel" hidden>
+    <h2>Styles</h2>
+    <p class="lead">Pick a set: each one loads on its own, to keep the page light.</p>
+    <div class="chips" id="style-chips"></div>
+    <p class="lead" id="style-lead"></p>
+    <p id="loading" aria-live="polite"></p>
+    <div id="style-gallery"></div>
   </section>
 
   <footer>
     <p>An open-source tool in the making: create your mascot with ready-made parts, keep it in a library, and let AI agents use it through MCP to make videos, games and apps. Exports glTF (.glb) with a skeleton and named moves.</p>
-    <p>Prototype, October 2026 · built with <a href="https://threejs.org" style="color: var(--accent)">three.js</a> · color-flow and cut-out finishes export as vinyl.</p>
+    <p>Prototype, October 2026 · built with <a href="https://threejs.org">three.js</a> · color-flow and cut-out finishes export as vinyl.</p>
   </footer>
 </main>
 <script type="module">
@@ -556,42 +567,244 @@ const MOTIONS = {
     return { eyes: 'open', yaw: q < 0.5 ? -0.9 + 1.8 * k : 0.9 - 1.8 * k, blink: 2.4, mood: 'lavora' }; },
 };
 
-// ---------- La scena a due: il Mostro dorme, arriva Mirtillo, si salutano, si battono il cinque, festeggiano, si
-// abbracciano, si salutano; Mirtillo se ne va e il Mostro torna a dormire. Un giro di 10 s che si chiude. ----------
-function duet(t) {
-  const T = phase(t, 10) * 10, seg = (a, b) => Math.min(Math.max((T - a) / (b - a), 0), 1);
-  const walk = (tt, yaw) => ({ ...MOTIONS.cammina(tt), yaw });
-  const wave = (arm, yaw, look, from) => ({ eyes: 'happy', yaw, look,
-    [arm]: { up: -1.1 + (2.4 + 0.3 * Math.sin(2 * PI * T / 0.4)) * ease(seg(from, from + 0.25)), fwd: 0.15 } });
-  const five = (arm, yaw, look) => ({ eyes: 'happy', yaw: yaw * 0.6, look, [arm]: { up: -1.1 + 2.5 * ease(seg(5.0, 5.25)), fwd: 0.55 * ease(seg(5.0, 5.25)) } });   // in alto e un po' verso di noi, così il cinque si vede
-  const hug = (side, yaw) => { const u = ease(seg(7.2, 7.6)) * (1 - ease(seg(8.1, 8.4)));
-    return { eyes: 'happy', yaw, leanZ: -side * 0.16 * u, armR: { up: -0.6, fwd: 0.8 * u }, armL: { up: -0.6, fwd: 0.8 * u } }; };
-  let A, B, ax = -0.75, bx = 0.75;
-  // A, il Mostro bianco, a sinistra
-  if (T < 2.4) { A = { ...MOTIONS.dorme(T), yaw: 0.3 }; ax = -1.05; }
-  else if (T < 3.0) { A = { ...(T > 2.55 ? hop(T - 2.55, 0.45, 0.07) : {}), eyes: 'open', yaw: 0.3 + 0.4 * ease(seg(2.4, 2.9)), look: 0.6 }; ax = -1.05; }
-  else if (T < 4.2) { A = wave('armR', 0.7, 0.5, 3.0); ax = -1.05; }
-  else if (T < 5.0) { A = walk(T, 0.9); ax = -1.05 + 0.3 * seg(4.2, 5.0); }
-  else if (T < 5.5) A = five('armR', 0.7, 0.5);
-  else if (T < 7.2) A = { ...MOTIONS.festeggia(T - 5.5), yaw: 0.5 };
-  else if (T < 8.4) A = hug(1, 0.6);
-  else if (T < 9.0) A = wave('armR', 0.6, 0.6, 8.4);
-  else if (T < 9.6) { A = walk(T, -0.4); ax = -0.75 - 0.3 * seg(9.0, 9.6); }
-  else { A = { ...MOTIONS.dorme(T), yaw: 0.3 * seg(9.6, 10) }; ax = -1.05; }
-  // B, Mirtillo, arriva da destra
-  if (T < 2.0) { B = walk(T, -1.1); bx = 2.6 - 1.55 * seg(0, 2.0); }
-  else if (T < 2.4) { B = wave('armL', -0.7, -0.5, 2.0); bx = 1.05; }
-  else if (T < 3.0) { B = { ...hop(T - 2.4, 0.6, 0.06), eyes: 'happy', yaw: -0.7, look: -0.5 }; bx = 1.05; }
-  else if (T < 4.2) { B = wave('armL', -0.7, -0.5, 3.0); bx = 1.05; }
-  else if (T < 5.0) { B = walk(T + 0.6, -0.9); bx = 1.05 - 0.3 * seg(4.2, 5.0); }
-  else if (T < 5.5) B = five('armL', -0.7, -0.5);
-  else if (T < 7.2) B = { ...MOTIONS.festeggia(T - 5.5 + 0.42), yaw: -0.5 };   // salti alternati
-  else if (T < 8.4) B = hug(-1, -0.6);
-  else if (T < 9.0) B = wave('armL', -0.6, -0.6, 8.4);
-  else { B = walk(T, 1.1); bx = 0.75 + 1.85 * seg(9.0, 10.0); }
-  return { A, B, ax, bx, burst: T >= 5.2 && T < 5.9 ? seg(5.2, 5.9) : -1 };
+// ---------- Lo stile carta: figure ritagliate o gonfiate, colore piatto, gambe lunghe col ginocchio, cambio di forma ----------
+const Paper = (() => {
+const PI = Math.PI, GROUND = 92, U = 50;   // sagome in coordinate 2D 0…100 col suolo a 92; nel 3D 50 unità = 1
+const phase = (t, p) => ((t % p) + p) % p / p;
+const ease = x => { const v = Math.min(Math.max(x, 0), 1); return v * v * (3 - 2 * v); };
+const lerp = (a, b, k) => a + (b - a) * k;
+const W = (X, Y) => [(X - 50) / U, (GROUND - Y) / U];   // dalla tela 2D al 3D
+
+// ---------- Le sagome (come la prova 2D) ----------
+const ring = (n, f) => Array.from({ length: n }, (_, i) => f(i / n * 2 * PI));
+const SHAPES = {
+  quadrato: [[24, 18], [70, 14], [77, 21], [75, 57], [68, 62], [26, 61]],
+  rombo: [[50, 7], [66, 20], [78, 35], [50, 63], [22, 37], [31, 22]],
+  tondo: ring(15, a => { const r = 26 * (1 + 0.04 * Math.sin(3 * a + 1) + 0.03 * Math.cos(5 * a)); return [50 + r * Math.cos(a), 37 + r * 0.92 * Math.sin(a)]; }),
+  papillon: [[23, 14], [50, 12], [77, 16], [68, 37], [78, 60], [50, 57], [22, 61], [32, 37]],
+  corona: [[21, 42], [24, 22], [32, 33], [41, 12], [50, 27], [59, 12], [68, 33], [76, 22], [79, 42],
+    ...Array.from({ length: 13 }, (_, i) => { const a = (i + 1) / 14 * PI; return [50 + 29 * Math.cos(a), 42 + 20 * Math.sin(a)]; })],
+  uovo: ring(48, a => { const s = Math.sin(a); return [50 + 27 * Math.cos(a) * (1 - 0.16 * Math.max(0, -s)), 36 + s * (s < 0 ? 28 : 23)]; }),
+};
+const NAMES = { quadrato: 'Quadrato tagliato', rombo: 'Rombo', tondo: 'Tondo sfaccettato', papillon: 'Papillon', corona: 'Corona', uovo: 'Uovo' };
+function resample(poly, n = 96) {   // stessi punti per tutte le sagome: servono per trasformarne una nell'altra
+  let area = 0; for (let i = 0; i < poly.length; i++) { const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length]; area += x1 * y2 - x2 * y1; }
+  const P = area < 0 ? [...poly].reverse() : poly;
+  const seg = P.map((p, i) => Math.hypot(P[(i + 1) % P.length][0] - p[0], P[(i + 1) % P.length][1] - p[1])), L = seg.reduce((a, b) => a + b, 0);
+  const out = []; let i = 0, acc = 0;
+  for (let k = 0; k < n; k++) { const d = k / n * L; while (acc + seg[i] < d) { acc += seg[i]; i = (i + 1) % P.length; }
+    const f = (d - acc) / seg[i], a = P[i], b = P[(i + 1) % P.length]; out.push([lerp(a[0], b[0], f), lerp(a[1], b[1], f)]); }
+  const cx = out.reduce((s, p) => s + p[0], 0) / n, cy = out.reduce((s, p) => s + p[1], 0) / n;
+  let best = 0, bd = 9; out.forEach(([x, y], k) => { const d = Math.abs(Math.atan2(x - cx, cy - y)); if (d < bd) { bd = d; best = k; } });
+  return out.slice(best).concat(out.slice(0, best));
 }
+const R = Object.fromEntries(Object.entries(SHAPES).map(([k, v]) => [k, resample(v)]));
+const bbox = poly => { const xs = poly.map(p => p[0]), ys = poly.map(p => p[1]); return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) }; };
+function bottomAt(poly, x) {
+  let y = -1; for (let i = 0; i < poly.length; i++) { const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length];
+    if ((x - x1) * (x - x2) <= 0 && x1 !== x2) y = Math.max(y, lerp(y1, y2, (x - x1) / (x2 - x1))); }
+  return y;
+}
+function morph(t, list, hold = 1.1, move = 0.5) {
+  const per = hold + move, n = list.length, q = (t % (per * n)) / per, i = Math.floor(q), f = ease((q - i - hold / per) / (move / per));
+  const A = R[list[i]], B = R[list[(i + 1) % n]];
+  return A.map((a, k) => [lerp(a[0], B[k][0], f), lerp(a[1], B[k][1], f)]);
+}
+// Le nostre sagome (percorsi del prototipo, rimpiccioliti e alzati sulle gambe), anche come contorno a punti.
+const OURS = {
+  mostro: g => { const Y = y => 25 + (y - 25) * 65 / 57; g.moveTo(22, Y(31)); g.quadraticCurveTo(50, Y(25), 78, Y(31)); g.quadraticCurveTo(89, Y(32), 89, Y(44));
+    g.bezierCurveTo(89, Y(62), 82, Y(78), 68, Y(80)); g.quadraticCurveTo(50, Y(84), 32, Y(80)); g.bezierCurveTo(18, Y(78), 11, Y(62), 11, Y(44)); g.quadraticCurveTo(11, Y(32), 22, Y(31)); },
+  nuvoletta: g => { g.roundRect(10, 54, 80, 36, 18); for (const [x, y, r] of [[31, 56, 19], [53, 45, 23], [73, 57, 17]]) { g.moveTo(x + r, y); g.arc(x, y, r, 0, 2 * PI); } },
+  cuore: g => { g.moveTo(50, 35.6); g.bezierCurveTo(50, 32.9, 46, 22, 30, 22); g.bezierCurveTo(14, 22, 10, 34, 10, 46.9); g.bezierCurveTo(10, 62, 26, 76, 44, 86.5);
+    g.quadraticCurveTo(50, 93.5, 56, 86.5); g.bezierCurveTo(74, 76, 90, 62, 90, 46.9); g.bezierCurveTo(90, 34, 86, 22, 70, 22); g.bezierCurveTo(54, 22, 50, 32.9, 50, 35.6); },
+  fantasmino: g => { g.moveTo(14, 82); g.lineTo(14, 56); g.arc(50, 56, 36, PI, 0); g.lineTo(86, 82); for (let i = 0; i < 4; i++) { const x = 86 - i * 18; g.quadraticCurveTo(x - 9, 97, x - 18, 82); } },
+  goccia: g => { g.moveTo(50, 20); g.bezierCurveTo(66.8, 26.2, 92, 41.08, 92, 67.68); g.bezierCurveTo(92, 87.52, 78.56, 90, 50, 90); g.bezierCurveTo(21.44, 90, 8, 87.52, 8, 67.68); g.bezierCurveTo(8, 41.08, 33.2, 26.2, 50, 20); },
+  quadratoMorbido: g => g.roundRect(8, 28, 84, 62, 27.3),
+};
+const OURS_NAMES = { mostro: 'Mostro', nuvoletta: 'Nuvoletta', cuore: 'Cuore', fantasmino: 'Fantasmino', goccia: 'Goccia', quadratoMorbido: 'Quadrato morbido' };
+const OURS_EYES = { mostro: 0.36, nuvoletta: 0.56, cuore: 0.38, fantasmino: 0.5, goccia: 0.56, quadratoMorbido: 0.56 };
+const OK = 0.72, oursDraw = name => g => { g.translate(50, 62); g.scale(OK, OK); g.translate(-50, -90); OURS[name](g); };
+function oursOutline(name) {   // il contorno a punti, letto da un percorso disegnato (serve al ritaglio spesso)
+  const c = document.createElement('canvas'); c.width = c.height = 200; const g = c.getContext('2d'); g.scale(2, 2); g.beginPath(); oursDraw(name)(g); g.fill();
+  const a = g.getImageData(0, 0, 200, 200).data, inside = (x, y) => a[(y * 200 + x) * 4 + 3] > 127;
+  const cx = 100, cy = 75, pts = [];   // raggi dal centro: il punto più lontano ancora dentro (va bene per sagome senza buchi)
+  for (let k = 0; k < 160; k++) { const an = k / 160 * 2 * PI; let r = 0; for (let s = 1; s < 140; s += 0.5) { const x = Math.round(cx + s * Math.cos(an)), y = Math.round(cy + s * Math.sin(an)); if (x < 0 || y < 0 || x > 199 || y > 199) break; if (inside(x, y)) r = s; }
+    pts.push([(cx + r * Math.cos(an)) / 2, (cy + r * Math.sin(an)) / 2]); }
+  return resample(pts);
+}
+
+// ---------- Corpo 1: ritaglio spesso (estrusione con bordi smussati) ----------
+const DEPTH = 0.13;
+function cardGeo(pts) {
+  const sh = new THREE.Shape(pts.map(([X, Y]) => new THREE.Vector2(...W(X, Y))));
+  const g = new THREE.ExtrudeGeometry(sh, { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.035, bevelSize: 0.028, bevelSegments: 3, curveSegments: 6 });
+  g.translate(0, 0, -DEPTH / 2);
+  return g;
+}
+// ---------- Corpo 2: gonfiato (distanza col segno dal contorno, cuscino più piatto, superficie dal volume) ----------
+function edt1d(f, n) {
+  const d = new Float64Array(n), v = new Int32Array(n), z = new Float64Array(n + 1); let k = 0; z[0] = -1e20; z[1] = 1e20;
+  for (let q = 1; q < n; q++) { let s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) { k--; s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]); } k++; v[k] = q; z[k] = s; z[k + 1] = 1e20; }
+  k = 0; for (let q = 0; q < n; q++) { while (z[k + 1] < q) k++; d[q] = (q - v[k]) * (q - v[k]) + f[v[k]]; }
+  return d;
+}
+const RES = 256, PX = RES / 100;
+function heightMap(draw) {
+  const c = document.createElement('canvas'); c.width = c.height = RES; const g = c.getContext('2d'); g.scale(PX, PX); g.beginPath(); draw(g); g.fill();
+  const a = g.getImageData(0, 0, RES, RES).data, n = RES;
+  const edt = inside => { const f = new Float64Array(n * n), col = new Float64Array(n);
+    for (let i = 0; i < n * n; i++) f[i] = (a[i * 4 + 3] > 127) === inside ? 1e20 : 0;
+    for (let x = 0; x < n; x++) { for (let y = 0; y < n; y++) col[y] = f[y * n + x]; const d = edt1d(col, n); for (let y = 0; y < n; y++) f[y * n + x] = d[y]; }
+    for (let y = 0; y < n; y++) { const d = edt1d(f.subarray(y * n, y * n + n), n); for (let x = 0; x < n; x++) f[y * n + x] = d[x]; }
+    return f; };
+  const fin = edt(true), fout = edt(false); let sd = new Float32Array(n * n), dmax = 0;
+  for (let i = 0; i < n * n; i++) { sd[i] = (Math.sqrt(fin[i]) - Math.sqrt(fout[i])) / PX / U; dmax = Math.max(dmax, sd[i]); }
+  for (let pass = 0; pass < 2; pass++) { const t = sd.slice();
+    for (let y = 2; y < n - 2; y++) for (let x = 2; x < n - 2; x++) { let s2 = 0; for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) s2 += t[(y + dy) * n + x + dx]; sd[y * n + x] = s2 / 25; } }
+  const Rr = 0.6 * dmax, D = 0.55 * dmax, hm = new Float32Array(n * n);   // più piatto dei cuscini: è carta gonfia, non un marshmallow
+  for (let i = 0; i < n * n; i++) { const u = Math.min(Math.max(sd[i], 0) / Rr, 1); hm[i] = sd[i] > 0 ? D * Math.sqrt(1 - (1 - u) * (1 - u)) : sd[i] * 8; }
+  return (X, Y) => { const fx = Math.min(Math.max(X * PX, 0), n - 1.001), fy = Math.min(Math.max(Y * PX, 0), n - 1.001), x0 = fx | 0, y0 = fy | 0, tx = fx - x0, ty = fy - y0;
+    return (hm[y0 * n + x0] * (1 - tx) + hm[y0 * n + x0 + 1] * tx) * (1 - ty) + (hm[(y0 + 1) * n + x0] * (1 - tx) + hm[(y0 + 1) * n + x0 + 1] * tx) * ty; };
+}
+const ZMAX = 0.35, MC = 88;
+function puffGeo(draw) {
+  const at = heightMap(draw), mc = new MarchingCubes(MC, new THREE.MeshBasicMaterial(), false, false, 200000); mc.isolation = 0.0005; mc.reset();
+  const n = MC, half = n / 2;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) { const X = ((x - half) / half + 1) * 50, Y = 100 - ((y - half) / half + 1) * 50, hh = at(X, Y);
+    for (let z = 0; z < n; z++) mc.field[z * n * n + y * n + x] = hh - Math.abs((z - half) / half * ZMAX); }
+  mc.update();
+  const cnt = mc.count, pos = new Float32Array(cnt * 3), nor = new Float32Array(cnt * 3), uv = new Float32Array(cnt * 2);
+  for (let i = 0; i < cnt; i++) {   // dalla griglia (-1…1) al 3D: x uguale, y spostata sul suolo, z schiacciata
+    const px = mc.positionArray[i * 3], py = mc.positionArray[i * 3 + 1], pz = mc.positionArray[i * 3 + 2];
+    pos.set([px, py + 1 - (100 - GROUND) / U, pz * ZMAX], i * 3); uv.set([px * 2, py * 2], i * 2);
+    const nx = mc.normalArray[i * 3], ny = mc.normalArray[i * 3 + 1], nz = mc.normalArray[i * 3 + 2] / ZMAX, l = Math.hypot(nx, ny, nz) || 1;
+    nor.set([nx / l, ny / l, nz / l], i * 3);
+  }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.BufferAttribute(nor, 3)); g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  mc.geometry.dispose();
+  return { geo: mergeVertices(g, 1e-5), at };
+}
+const polyDraw = pts => g => pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y));
+
+// ---------- Materiali: feltro nero (pieno), carta bianca col contorno (outline) ----------
+const INK = new THREE.Color('#2b2925'), PAPER = new THREE.Color('#f8f6f1');   // scritti come colori dello schermo, non come luce lineare (prima uscivano grigi)
+const FELT = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d'); g.fillStyle = '#808080'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 9000; i++) { const v = 90 + Math.random() * 90 | 0; g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 1.5, 1 + Math.random() * 1.5); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(3, 3); return t; })();
+const RAMP = (() => { const t = new THREE.DataTexture(new Uint8Array([214, 255]), 2, 1, THREE.RedFormat); t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true; return t; })();
+// Colore pieno, completamente piatto (come la finitura "piatta" del Mostro): niente luci, ombre né grana. Il 3D si legge dalla
+// sagoma, dal contorno e dal movimento.
+const bodyMat = style => new THREE.MeshBasicMaterial({ color: style === 'pieno' ? INK : PAPER, toneMapped: false });   // colori esatti, senza la resa dei chiari
+const LEG_MAT = new THREE.MeshBasicMaterial({ color: INK, toneMapped: false });
+const outlineMat = () => { const m = new THREE.MeshBasicMaterial({ color: INK, side: THREE.BackSide, toneMapped: false });
+  m.onBeforeCompile = s => { s.vertexShader = s.vertexShader.replace('#include <begin_vertex>', 'vec3 transformed = position + normalize(normal) * 0.024;'); }; return m; };
+const shellOf = geo => { const g = new THREE.BufferGeometry(); g.setAttribute('position', geo.attributes.position.clone()); const m = mergeVertices(g, 1e-4); m.computeVertexNormals(); return m; };   // normali morbide: il contorno non si apre sugli spigoli
+const EYE_GEO = new THREE.SphereGeometry(1, 20, 14);
+const HAPPY_GEO = (() => { const s = new THREE.Shape(); s.moveTo(-1, 0.55); s.quadraticCurveTo(0, -1.85, 1, 0.55); s.quadraticCurveTo(0, -0.2, -1, 0.55);
+  const g = new THREE.ShapeGeometry(s, 16); g.scale(1, -1, 1); return g; })();   // mezzaluna a "^"
+const SHADOW = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d');
+  const r = g.createRadialGradient(64, 64, 0, 64, 64, 64); r.addColorStop(0, 'rgba(0,0,0,.28)'); r.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = r; g.fillRect(0, 0, 128, 128); return new THREE.CanvasTexture(c); })();
+
+// ---------- La figura ----------
+const cache = {};
+class Carta {
+  constructor({ kind = 'ritaglio', style = 'pieno', shape = null, ours = null, morph: list = null, shoes = false }) {
+    Object.assign(this, { kind, style, list, shoes });
+    this.group = new THREE.Group(); this.rig = new THREE.Group(); this.pivot = new THREE.Group(); this.group.add(this.rig); this.rig.add(this.pivot);
+    this.mat = bodyMat(style); this.body = new THREE.Mesh(undefined, this.mat); this.pivot.add(this.body);
+    if (style === 'outline') { this.outline = new THREE.Mesh(undefined, outlineMat()); this.pivot.add(this.outline); }
+    const eyeMat = new THREE.MeshBasicMaterial({ color: style === 'pieno' ? PAPER : INK, side: THREE.DoubleSide, toneMapped: false });   // la mezzaluna è capovolta: va vista da tutti e due i lati
+    this.eyes = [1, 0.88].map((k, i) => { const e = new THREE.Group(); this.pivot.add(e);
+      const open = new THREE.Mesh(EYE_GEO, eyeMat); open.scale.set(0.062 * k, 0.108 * k, 0.02); e.add(open);
+      const happy = new THREE.Mesh(HAPPY_GEO, eyeMat); happy.scale.setScalar(0.09 * k); happy.position.z = 0.004; e.add(happy);
+      return { e, open, happy, k, dx: i ? 6.5 : -6.5 }; });
+    this.shadow = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 0.9), new THREE.MeshBasicMaterial({ map: SHADOW, transparent: true, depthWrite: false }));
+    this.shadow.rotation.x = -PI / 2; this.shadow.position.y = 0.002; this.group.add(this.shadow);
+    if (ours) { this.eyesAt = [50, 62 + (28 + OURS_EYES[ours] * 62 - 90) * OK]; this.setBody(kind === 'ritaglio' ? oursOutline(ours) : null, oursDraw(ours), 'ours:' + ours); }
+    else if (!list) this.setBody(R[shape], null, shape);
+    // gambe col ginocchio: coscia e stinco (lunghi uno), il ginocchio come pallina per tenerle unite quando si piega
+    this.legs = [-1, 1].map(s => { const hip = new THREE.Group(); this.rig.add(hip);
+      const thigh = new THREE.Mesh(new THREE.CylinderGeometry(0.042, 0.034, 1, 12).translate(0, -0.5, 0), LEG_MAT); hip.add(thigh);
+      const knee = new THREE.Group(); hip.add(knee); knee.add(new THREE.Mesh(new THREE.SphereGeometry(0.034, 14, 10), LEG_MAT));
+      const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.026, 1, 12).translate(0, -0.5, 0), LEG_MAT); knee.add(shin);
+      const foot = new THREE.Mesh(new THREE.SphereGeometry(0.1, 18, 10, 0, 2 * PI, 0, PI / 2), LEG_MAT); knee.add(foot);
+      if (shoes) foot.scale.set(1.5, 0.7, 0.85); else foot.scale.set(1, 0.75, 0.9);
+      return { s, hip, thigh, knee, shin, foot }; });
+  }
+  setBody(pts, draw, key) {   // il corpo e dove vanno occhi e gambe; per le sagome fisse la geometria si fa una volta sola
+    const k = `${this.kind}:${key ?? ''}`;
+    let entry = key && cache[k];
+    if (!entry) {
+      if (this.kind === 'ritaglio') { const geo = cardGeo(pts); entry = { geo, shell: shellOf(geo), surf: () => DEPTH / 2 + 0.035 }; }
+      else { const p = puffGeo(draw ?? polyDraw(pts)); entry = { geo: p.geo, shell: p.geo, surf: (X, Y) => p.at(X, Y) }; }   // le normali del volume puntano già fuori: il contorno usa quelle
+      if (key) cache[k] = entry; else { this.body.geometry?.dispose?.(); this.outline?.geometry?.dispose?.(); }
+    }
+    this.body.geometry = entry.geo; if (this.outline) this.outline.geometry = entry.shell;
+    const bb = pts ? bbox(pts) : { x0: 50 - 42 * OK, x1: 50 + 42 * OK, y0: 62 - 62 * OK, y1: 62 };
+    this.bb = bb; this.surf = entry.surf; this.pts = pts;
+    this.hipY = [-1, 1].map(s => { const hx = (bb.x0 + bb.x1) / 2 + s * 8; return (GROUND - ((pts ? bottomAt(pts, hx) : bb.y1) - 3)) / U; });
+  }
+  apply(p, t) {
+    if (this.list) this.setBody(morph(t, this.list), null, null);
+    const bb = this.bb, ax = (bb.x0 + bb.x1) / 2, [bx, by] = W(ax, bb.y1);
+    this.rig.position.y = (p.lift ?? 0) / U;
+    const crouch = (p.crouch ?? 0) / U;
+    // il corpo ruota e si schiaccia attorno al centro della base
+    this.pivot.position.set(bx, by - crouch, 0); this.body.position.set(-bx, -by, 0); if (this.outline) this.outline.position.copy(this.body.position);
+    this.pivot.rotation.z = -(p.rot ?? 0); this.pivot.scale.set(p.sx ?? 1, p.sy ?? 1, 1);
+    // occhi: ovali sulla superficie; "^" se contento; sbattono le palpebre; la larghezza non cambia
+    const [ex, ey] = this.eyesAt ?? [ax, bb.y0 + (bb.y1 - bb.y0) * 0.42];
+    const blink = p.blink ? (q => q < 0.12 ? Math.max(0.1, Math.abs(q - 0.06) / 0.06) : 1)(phase(t, p.blink) * p.blink) : 1;
+    for (const E of this.eyes) {
+      const X = ex + E.dx + (p.look ?? 0) * 3, [x, y] = W(X, ey);
+      E.e.position.set(x - bx, y - by, this.surf(X, ey) + 0.004);
+      E.open.visible = !p.happy; E.happy.visible = !!p.happy; E.open.scale.y = 0.108 * E.k * blink;
+      E.e.scale.set(1 / (p.sx ?? 1), 1 / (p.sy ?? 1), 1);
+    }
+    // gambe col ginocchio: si dice dove sta il piede (avanti, in alto) e coscia e stinco si piegano da soli, col ginocchio in
+    // avanti e il piede sempre piatto (due ossa, legge del coseno)
+    this.legs.forEach((L, i) => {
+      const P = (L.s < 0 ? p.legL : p.legR) ?? {}, [hx] = W(ax + L.s * 8, 0), hy = this.hipY[i] - crouch, half = this.hipY[i] / 2;
+      const d = (P.dx ?? 0) / U * 0.8, h = Math.max(hy - (P.up ?? 0) / U, 0.05), D = Math.min(Math.hypot(d, h), 2 * half - 1e-4);
+      const clamp = v => Math.min(1, Math.max(-1, v));
+      const bend = PI - Math.acos(clamp((2 * half * half - D * D) / (2 * half * half)));
+      const a = Math.atan2(d, h) + Math.acos(clamp(D / (2 * half)));
+      L.hip.position.set(hx, hy, 0); L.hip.rotation.x = -a;
+      L.thigh.scale.y = half; L.knee.position.set(0, -half, 0); L.knee.rotation.x = bend;
+      L.shin.scale.y = half; L.foot.position.set(this.shoes ? L.s * 0.05 : 0, -half, this.shoes ? 0.03 : 0); L.foot.rotation.x = a - bend;
+    });
+    const air = this.rig.position.y; this.shadow.scale.setScalar(Math.max(0.3, 1 - air * 1.2)); this.shadow.material.opacity = Math.max(0.2, 1 - air * 1.8);
+  }
+}
+
+// ---------- I movimenti cartoon (gli stessi della prova 2D) ----------
+const MOVES = {
+  fermo: t => ({ lift: Math.sin(2 * PI * t / 2.4) * 0.8, sy: 1 + 0.015 * Math.sin(2 * PI * t / 2.4), blink: 2.4 }),
+  cammina: t => { const p = 2 * PI * t / 0.8;
+    return { lift: Math.abs(Math.sin(p)) * 2.2, rot: Math.sin(p) * 0.05, blink: 2.4,
+      legL: { dx: 7 * Math.sin(p), up: Math.max(0, Math.cos(p)) * 5 }, legR: { dx: -7 * Math.sin(p), up: Math.max(0, -Math.cos(p)) * 5 } }; },
+  corre: t => { const p = 2 * PI * t / 0.46;
+    return { lift: 2 + Math.abs(Math.sin(p)) * 4, rot: 0.1 + Math.sin(p) * 0.04, look: 0.6,
+      legL: { dx: 11 * Math.sin(p), up: Math.max(0, Math.cos(p)) * 8 }, legR: { dx: -11 * Math.sin(p), up: Math.max(0, -Math.cos(p)) * 8 } }; },
+  salta: t => { const q = phase(t, 1.6); let lift = 0, sy = 1, sx = 1, crouch = 0, tuck = 0;
+    if (q < 0.15) { const k = ease(q / 0.15); crouch = 5 * k; sy = 1 - 0.1 * k; sx = 1 + 0.06 * k; }
+    else if (q < 0.55) { const k = (q - 0.15) / 0.4; lift = 20 * Math.sin(PI * k); sy = 1.06 - 0.06 * k; sx = 0.96 + 0.04 * k; tuck = 8 * Math.sin(PI * k); }
+    else if (q < 0.7) { const k = (q - 0.55) / 0.15; crouch = 4 * Math.sin(PI * k); sy = 1 - 0.08 * Math.sin(PI * k); sx = 1 + 0.05 * Math.sin(PI * k); }
+    return { lift, sy, sx, crouch, happy: q > 0.15 && q < 0.7, blink: 2.4, legL: { up: tuck, dx: tuck * 0.3 }, legR: { up: tuck, dx: tuck * 0.3 } }; },   // in aria le gambe si raccolgono
+  contento: t => { const q = phase(t, 0.6); return { lift: 4 * Math.sin(PI * q), rot: 0.07 * Math.sin(2 * PI * t / 1.2), happy: true }; },
+  guarda: t => { const q = phase(t, 3.2), l = q < 0.15 ? 0 : q < 0.3 ? -ease((q - 0.15) / 0.15) : q < 0.55 ? -1 : q < 0.7 ? -1 + 2 * ease((q - 0.55) / 0.15) : q < 0.9 ? 1 : 1 - ease((q - 0.9) / 0.1);
+    return { look: l, rot: -0.05 * l, blink: 3.2 }; },
+  balla: t => { const p = 2 * PI * t / 1.2;
+    return { rot: 0.13 * Math.sin(p), lift: Math.abs(Math.sin(p)) * 2, happy: true, legL: { up: Math.max(0, Math.sin(p)) * 5 }, legR: { up: Math.max(0, -Math.sin(p)) * 5 } }; },
+};
+
+
+return { Carta, MOVES, NAMES, OURS_NAMES };
+})();
+
 // ---------- Views: one WebGL renderer draws every cell (one scene, camera and mascot per cell) ----------
+// A tab or a style set builds its views the first time it opens; hidden ones are skipped by the drawing loop.
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gl'), antialias: true, alpha: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, innerWidth < 700 ? 1.5 : 2));
 renderer.setScissorTest(true);
@@ -610,25 +823,59 @@ function camera(el, cam, target, { interactive = true, spin = false } = {}) {
   if (!interactive) el.style.touchAction = 'pan-y';   // gallery cells must not block page scrolling on phones
   return c;
 }
-function addScene(el) {
-  const scene = stage();
-  const A = new Mostro({ arms: true, legs: true }), B = new Mostro({ shape: 'quadrato', color: BLUE, arms: true, legs: true });
-  scene.add(A.group, B.group);
-  const burst = [0, 1, 2, 3, 4, 5].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: STAR_TEX, transparent: true, depthWrite: false })); scene.add(s); return s; });
-  const cam = new THREE.PerspectiveCamera(30, 1.8, 0.1, 30); cam.position.set(0, 1.05, 4.7);
-  views.push({ el, scene, cam, controls: camera(el, cam, [0, 0.6, 0]), m: A, update(t, dt) {
-    const d = duet(t);
-    A.group.position.x = d.ax; B.group.position.x = d.bx;
-    A.apply(d.A, t, dt); B.apply(d.B, t, dt);
-    burst.forEach((s, k) => { s.visible = d.burst >= 0; const a = k / 6 * 2 * PI, r = 0.12 + 0.4 * d.burst;
-      s.position.set(Math.cos(a) * r, 1.12 + Math.sin(a) * r * 0.8, 0.45); s.scale.setScalar(0.2 * Math.sin(PI * Math.max(d.burst, 0)) + 0.001); });
-  } });
-}
 function addView(el, opts, motion, view = {}) {
   const scene = stage(), m = new Mostro(opts); scene.add(m.group);
   const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20); cam.position.set(1.2, 1.05, 3.1);
   const v = { el, scene, cam, controls: camera(el, cam, [0, 0.5, 0], view), m, motion: MOTIONS[motion] };
   views.push(v); return v;
+}
+function addPaper(el, o) {   // paper style: flat colour, long legs with knees, its own cartoon moves
+  const scene = new THREE.Scene(), m = new Paper.Carta(o); scene.add(m.group); m.group.rotation.y = o.turn ?? -0.35;
+  const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20); cam.position.set(0.55, 1.15, 3.9);
+  views.push({ el, scene, cam, controls: camera(el, cam, [0, 0.92, 0], { interactive: false, spin: !!o.spin }), m, move: Paper.MOVES[o.move], t0: o.t0 ?? 0 });
+}
+
+// ---------- Intro: the white Mostro and a paper mascot on long legs. A 10 s loop that closes on itself:
+// the Mostro sleeps, the paper one walks in, they say hi, jump together, celebrate, and it walks off. ----------
+function intro(t) {
+  const T = phase(t, 10) * 10, seg = (a, b) => Math.min(Math.max((T - a) / (b - a), 0), 1), M = Paper.MOVES;
+  const walk = (tt, yaw) => ({ ...MOTIONS.cammina(tt), yaw });
+  const wave = (yaw, from) => ({ eyes: 'happy', yaw, look: 0.5, armR: { up: -1.1 + (2.4 + 0.3 * Math.sin(2 * PI * T / 0.4)) * ease(seg(from, from + 0.25)), fwd: 0.15 } });
+  let A, B, ax = -0.85, bx = 0.85, byaw = -0.45;
+  // A, the Mostro, on the left
+  if (T < 2.6) { A = { ...MOTIONS.dorme(T), yaw: 0.3 }; ax = -1.15; }
+  else if (T < 3.2) { A = { ...(T > 2.75 ? hop(T - 2.75, 0.45, 0.07) : {}), eyes: 'open', yaw: 0.3 + 0.4 * ease(seg(2.6, 3.1)), look: 0.6 }; ax = -1.15; }
+  else if (T < 4.4) { A = wave(0.7, 3.2); ax = -1.15; }
+  else if (T < 5.2) { A = walk(T, 0.9); ax = -1.15 + 0.3 * seg(4.4, 5.2); }
+  else if (T < 5.95) A = { ...hop(T - 5.2, 1.0, 0.18), eyes: 'happy', yaw: 0.6 };   // same take-off and peak as the paper jump
+  else if (T < 7.6) A = { ...MOTIONS.festeggia(T - 5.95), yaw: 0.5 };
+  else if (T < 8.6) A = wave(0.6, 7.6);
+  else if (T < 9.4) { A = walk(T, -0.4); ax = -0.85 - 0.3 * seg(8.6, 9.4); }
+  else { A = { ...MOTIONS.dorme(T), yaw: 0.3 * seg(9.4, 10) }; ax = -1.15; }
+  // B, the paper mascot, walks in from the right
+  if (T < 2.4) { B = M.cammina(T); bx = 3.6 - 2.4 * seg(0, 2.4); byaw = -0.6; }
+  else if (T < 3.2) { B = { ...M.fermo(T), look: -1 }; bx = 1.2; }
+  else if (T < 4.4) { B = { ...M.contento(T), look: -0.6 }; bx = 1.2; }
+  else if (T < 5.2) { B = { ...M.cammina(T), look: -0.6 }; bx = 1.2 - 0.35 * seg(4.4, 5.2); byaw = -0.6; }
+  else if (T < 5.95) B = M.salta((T - 5.2) * 1.6);   // its jump lasts 0.75 s of a 1.6 s loop: sped up to match the Mostro
+  else if (T < 7.6) B = M.balla(T);
+  else if (T < 8.6) B = { ...M.contento(T), look: -0.6 };
+  else { B = M.cammina(T); bx = 0.85 + 2.75 * seg(8.6, 10); byaw = -0.45 + 1.05 * ease(seg(8.6, 8.9)); }
+  return { A, B, ax, bx, byaw, burst: T >= 5.45 && T < 6.1 ? seg(5.45, 6.1) : -1 };
+}
+function addIntro(el) {
+  const scene = stage();
+  const A = new Mostro({ arms: true, legs: true }), B = new Paper.Carta({ kind: 'gonfio', style: 'pieno', shape: 'rombo' });
+  B.group.scale.setScalar(0.9); scene.add(A.group, B.group);
+  const burst = [0, 1, 2, 3, 4, 5].map(() => { const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: STAR_TEX, transparent: true, depthWrite: false })); scene.add(s); return s; });
+  const cam = new THREE.PerspectiveCamera(30, 2, 0.1, 30); cam.position.set(0, 1.2, 4.6);
+  views.push({ el, scene, cam, fit: 2.3, controls: camera(el, cam, [0, 0.78, 0]), m: A, update(t, dt) {
+    const d = intro(t);
+    A.group.position.x = d.ax; B.group.position.x = d.bx; B.group.rotation.y = d.byaw;
+    A.apply(d.A, t, dt); B.apply(d.B, t);
+    burst.forEach((s, k) => { s.visible = d.burst >= 0; const a = k / 6 * 2 * PI, r = 0.12 + 0.4 * d.burst;
+      s.position.set(Math.cos(a) * r, 1.45 + Math.sin(a) * r * 0.8, 0.45); s.scale.setScalar(0.2 * Math.sin(PI * Math.max(d.burst, 0)) + 0.001); });
+  } });
 }
 
 // ---------- The configurator ----------
@@ -691,8 +938,8 @@ function buildConfigurator() {
     rebuild();
   };
   document.getElementById('download').onclick = downloadGLB;
-  if (new URLSearchParams(location.search).has('selftest')) downloadGLB();   // check the export without clicking
   sync();
+  if (new URLSearchParams(location.search).has('selftest')) downloadGLB();   // check the export without clicking
 }
 
 // ---------- .glb download: body, eyes, arms and legs, skeleton, and two baked moves (idle + the chosen one) ----------
@@ -726,21 +973,84 @@ async function downloadGLB() {
   document.getElementById('dl-note').textContent = `Saved ${a.download} (${(glb.byteLength / 1024).toFixed(0)} KB): skeleton, “idle” and “${move}”. Opens in Blender, Godot, Unity or any glTF viewer.`;
 }
 
-// ---------- Build the page ----------
-addScene(document.getElementById('hero-view'));
-buildConfigurator();
-setTimeout(() => {   // the gallery shapes take ~0.1 s each to inflate: build them after the first frame
-  const grid = document.getElementById('gallery-shapes');
-  for (const [shape, label] of SHAPES) {
-    const c = document.createElement('figure'); c.className = 'tile'; c.innerHTML = `<div class="tile-view"></div><figcaption>${label}</figcaption>`; grid.append(c);
-    addView(c.firstChild, { shape: shape === 'mostro' ? null : shape }, 'legge', { interactive: false, spin: true });
+// ---------- Styles: each set is built the first time it is picked ----------
+const P6 = Object.keys(Paper.NAMES), O6 = Object.keys(Paper.OURS_NAMES);
+const PAPER_EN = { quadrato: 'Cut square', rombo: 'Diamond', tondo: 'Faceted round', papillon: 'Bow tie', corona: 'Crown', uovo: 'Egg' };
+const OURS_EN = { mostro: 'Monster', nuvoletta: 'Cloud', cuore: 'Heart', fantasmino: 'Ghost', goccia: 'Drop', quadratoMorbido: 'Soft square' };
+const cushion = (label, opts) => [label, el => addView(el, opts, 'legge', { interactive: false, spin: true })];
+const paper = (label, o) => [label, el => addPaper(el, o), true];
+const paperRows = style => [
+  ...P6.map((s, i) => paper(`${PAPER_EN[s]} · cut-out`, { kind: 'ritaglio', style, shape: s, move: 'fermo', spin: true, shoes: style === 'pieno' && i % 2 === 1, t0: i * 0.4 })),
+  ...P6.map((s, i) => paper(`${PAPER_EN[s]} · puffed`, { kind: 'gonfio', style, shape: s, move: 'fermo', spin: true, t0: i * 0.4 }))];
+const SETS = [
+  ['shapes', 'Cushion shapes', 'Every body is inflated from a flat 2D silhouette, then gets a soft skeleton inside.',
+    () => SHAPES.map(([shape, label]) => cushion(label, { shape: shape === 'mostro' ? null : shape }))],
+  ['finishes', 'Cushion finishes', 'Same mascot, eight finishes: from vinyl toy to flat drawing, colour flow and 2D cut-out textures.',
+    () => FINISHES.map(([, label, f]) => cushion(label, { ...f }))],
+  ['paper-solid', 'Paper · solid', 'Flat black with white eyes, no light and no shading: the 3D reads from the silhouette and the motion. Cut-out card or puffed.',
+    () => paperRows('pieno')],
+  ['paper-outline', 'Paper · outline', 'Flat white with a black outline. Cut-out card or puffed.', () => paperRows('outline')],
+  ['morph', 'Shape-shifting', 'The body morphs from one silhouette to the next, also while walking.', () => [
+    paper('Solid', { kind: 'ritaglio', style: 'pieno', morph: P6, move: 'fermo' }),
+    paper('Outline', { kind: 'ritaglio', style: 'outline', morph: P6, move: 'fermo' }),
+    paper('Solid · walking', { kind: 'ritaglio', style: 'pieno', morph: ['tondo', 'quadrato', 'papillon', 'rombo'], move: 'cammina', turn: -0.4 }),
+    paper('Outline · walking', { kind: 'ritaglio', style: 'outline', morph: ['uovo', 'corona', 'rombo', 'tondo'], move: 'cammina', turn: -0.4 })]],
+  ['cartoon', 'Cartoon moves', 'Long legs with knees: you say where the foot goes, thigh and shin bend on their own.', () => [
+    paper('Walk', { kind: 'ritaglio', style: 'pieno', shape: 'quadrato', move: 'cammina', shoes: true, turn: -0.4 }),
+    paper('Jump', { kind: 'gonfio', style: 'outline', shape: 'uovo', move: 'salta' }),
+    paper('Happy', { kind: 'ritaglio', style: 'pieno', shape: 'papillon', move: 'contento' }),
+    paper('Look around', { kind: 'ritaglio', style: 'outline', shape: 'rombo', move: 'guarda' }),
+    paper('Dance', { kind: 'gonfio', style: 'pieno', shape: 'tondo', move: 'balla' }),
+    paper('Run', { kind: 'ritaglio', style: 'outline', shape: 'corona', move: 'corre', turn: -0.45 })]],
+  ['ours', 'Cushion shapes on long legs', 'The cushion silhouettes in the paper style: puffed solid, then cut-out outline.', () => [
+    ...O6.map((s, i) => paper(`${OURS_EN[s]} · puffed`, { kind: 'gonfio', style: 'pieno', ours: s, move: i % 2 ? 'cammina' : 'fermo', spin: i % 2 === 0, turn: i % 2 ? -0.4 : -0.35 })),
+    ...O6.map((s, i) => paper(`${OURS_EN[s]} · cut-out`, { kind: 'ritaglio', style: 'outline', ours: s, move: i % 2 ? 'fermo' : 'contento', spin: i % 2 === 1 }))]],
+];
+const builtSets = {};
+let building = null;
+function showSet(key) {
+  const set = SETS.find(s => s[0] === key) ?? SETS[0];
+  for (const b of document.getElementById('style-chips').children) b.setAttribute('aria-pressed', b.dataset.value === set[0]);
+  document.getElementById('style-lead').textContent = set[2];
+  for (const [k, box] of Object.entries(builtSets)) box.hidden = k !== set[0];
+  let box = builtSets[set[0]];
+  if (!box) {
+    box = builtSets[set[0]] = document.createElement('div'); box.className = 'gallery'; document.getElementById('style-gallery').append(box);
+    box.queue = set[3]().map(([label, build, isPaper]) => {
+      const c = document.createElement('figure'); c.className = 'tile' + (isPaper ? ' paper' : '');
+      c.innerHTML = `<div class="tile-view"></div><figcaption>${label}</figcaption>`; box.append(c);
+      return () => build(c.firstChild);
+    });
+    box.total = box.queue.length;
   }
-  const grid2 = document.getElementById('gallery-finishes');
-  for (const [, label, f] of FINISHES) {
-    const c = document.createElement('figure'); c.className = 'tile'; c.innerHTML = `<div class="tile-view"></div><figcaption>${label}</figcaption>`; grid2.append(c);
-    addView(c.firstChild, { ...f }, 'legge', { interactive: false, spin: true });
+  // ponytail: one figure per frame, so a puffed body (~0.2 s to inflate) never freezes the page for long; a set left
+  // half built picks up where it stopped
+  const note = document.getElementById('loading');
+  const step = () => { if (!box.queue.length) { note.textContent = ''; return; }
+    box.queue.shift()(); note.textContent = `Building ${box.total - box.queue.length} of ${box.total}…`; building = setTimeout(step, 16); };
+  clearTimeout(building); step();
+}
+function buildStyles() {
+  const box = document.getElementById('style-chips');
+  for (const [key, label] of SETS) {
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = label; b.dataset.value = key;
+    b.onclick = () => { showSet(key); history.replaceState(null, '', `#styles/${key}`); }; box.append(b);
   }
-}, 60);
+}
+
+// ---------- Tabs: each one builds its content the first time it opens ----------
+const TABS = { intro: () => addIntro(document.getElementById('hero-view')), make: buildConfigurator, styles: buildStyles };
+const opened = {};
+function openTab(route, push = true) {
+  const [tab, set] = route.split('/'), name = TABS[tab] ? tab : 'intro';
+  for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', b.dataset.tab === name);
+  for (const k of Object.keys(TABS)) document.getElementById(`tab-${k}`).hidden = k !== name;
+  if (!opened[name]) { opened[name] = true; TABS[name](); }
+  if (name === 'styles') showSet(set ?? document.querySelector('#style-chips [aria-pressed="true"]')?.dataset.value ?? SETS[0][0]);
+  if (push) history.replaceState(null, '', name === 'intro' ? location.pathname + location.search : `#${name}${name === 'styles' && set ? '/' + set : ''}`);
+}
+for (const b of document.querySelectorAll('.tabs button')) b.onclick = () => openTab(b.dataset.tab);
+openTab(location.hash.slice(1), false);
 
 // ---------- The drawing loop ----------
 let last = performance.now();
@@ -752,10 +1062,12 @@ function loop(now) {
   renderer.setScissor(0, 0, W, Hh); renderer.clear();
   for (const v of views) {
     const r = v.el.getBoundingClientRect();
-    if (r.bottom < 0 || r.top > Hh || r.right < 0 || r.left > W) continue;
-    if (v.update) v.update(t, dt); else v.m.apply(v.motion(t), t, dt);
+    if (!r.width || r.bottom < 0 || r.top > Hh || r.right < 0 || r.left > W) continue;   // hidden tab or off screen
+    if (v.update) v.update(t, dt); else if (v.move) { const tt = t + v.t0; v.m.apply(v.move(tt), tt); } else v.m.apply(v.motion(t), t, dt);
     v.controls.update();
-    v.cam.aspect = r.width / r.height; v.cam.updateProjectionMatrix();
+    v.cam.aspect = r.width / r.height;
+    if (v.fit) v.cam.fov = 360 / PI * Math.atan(Math.tan(PI / 12) * Math.max(1, v.fit / v.cam.aspect));   // narrow screens: widen the view so the whole scene fits
+    v.cam.updateProjectionMatrix();
     const y = Hh - r.bottom;
     if (v.m.tex) {
       const u = v.m.mat.userData.u, dpr = renderer.getPixelRatio(); v.cam.updateMatrixWorld();
@@ -770,6 +1082,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
 </script>
 </body>
 </html>
