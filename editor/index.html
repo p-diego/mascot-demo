@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mascot Generator</title>
+<meta name="description" content="Make a 3D mascot from ready-made parts, watch it move, copy its link or download it as a .glb.">
+<style>
+  :root {
+    --chrome: #fbfbfa; --view: #ecebe7; --line: #e3e2de; --line-strong: #cfcdc7; --hover: #f0efec; --sel: #e7e6e2;
+    --text: #1d1d1b; --muted: #75736d; --ink: #1d1d1b; --warn: #8a5a00; --bar: 44px;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; background: var(--chrome); color: var(--text); font: 13px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button, select, input { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid #3b82f6; outline-offset: 1px; }
+  .muted { color: var(--muted); }
+
+  .bar { position: sticky; top: 0; z-index: 20; height: var(--bar); display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px;
+    padding: 0 12px; background: var(--chrome); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; overflow: hidden; } .brand b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; } .brand svg { flex: none; }
+  .bar-end { display: flex; justify-content: flex-end; gap: 6px; }
+  .seg { display: inline-flex; background: #ecebe8; border-radius: 7px; padding: 2px; gap: 2px; flex-wrap: nowrap; }
+  .seg button { border: 0; background: none; height: 26px; padding: 0 12px; border-radius: 5px; color: var(--muted); white-space: nowrap; }
+  .seg button:hover:not(:disabled) { color: var(--text); }
+  .seg button[aria-selected="true"], .seg button[aria-pressed="true"] { background: #fff; color: var(--text); box-shadow: 0 0 0 .5px rgba(0,0,0,.14), 0 1px 2px rgba(0,0,0,.08); }
+  .seg button:disabled { cursor: default; opacity: .5; }
+  .btn { height: 28px; padding: 0 11px; border-radius: 6px; border: 1px solid var(--line-strong); background: #fff; white-space: nowrap; }
+  .btn:hover { background: var(--hover); }
+  .btn.ghost { border-color: transparent; background: none; color: var(--muted); } .btn.ghost:hover { color: var(--text); background: var(--hover); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; } .btn.primary:hover { background: #3a3936; }
+  .btn:disabled, .btn[aria-disabled="true"] { opacity: .55; cursor: progress; }
+
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) 288px; grid-template-rows: minmax(0, 1fr) auto; height: calc(100vh - var(--bar)); height: calc(100dvh - var(--bar)); }
+  .view { grid-column: 1; grid-row: 1; position: relative; background: var(--view); min-height: 0; }
+  .view live-mascot { position: absolute; inset: 0; width: 100%; height: 100%; cursor: grab; } .view live-mascot:active { cursor: grabbing; }
+  .toast { position: absolute; right: 10px; bottom: 10px; z-index: 20; margin: 0; max-width: min(460px, calc(100% - 20px)); padding: 7px 10px; border-radius: 6px;
+    background: var(--ink); color: #fff; font-size: 12px; overflow-wrap: anywhere; } .toast:empty { display: none; } .toast.error { background: #b3261e; }
+  .toast.keep { user-select: all; cursor: text; }
+  .inspector { grid-column: 2; grid-row: 1 / span 2; background: var(--chrome); border-left: 1px solid var(--line); overflow-y: auto; }
+  .sec { padding: 12px 14px 14px; border-bottom: 1px solid var(--line); }
+  .sec h3 { font-size: 12px; font-weight: 600; margin: 0 0 10px; }
+  .sec p { margin: 0; color: var(--muted); font-size: 12px; }
+  .field { display: grid; grid-template-columns: 70px 1fr; align-items: center; gap: 8px; margin-top: 8px; } .sec h3 + .field { margin-top: 0; } .field > span:first-child, .field > label:first-child { color: var(--muted); }
+  .range { display: grid; grid-template-columns: 1fr 40px auto; align-items: center; gap: 6px; } .range output { font-variant-numeric: tabular-nums; color: var(--muted); text-align: right; }
+  input[type=range] { width: 100%; accent-color: var(--ink); margin: 0; } input[type=text] { width: 100%; height: 28px; padding: 0 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff; }
+  input[type=color] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff; }
+  select { appearance: none; -webkit-appearance: none; width: 100%; height: 28px; padding: 0 24px 0 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: #fff
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%2375736d' stroke-width='1.4'/%3E%3C/svg%3E") no-repeat right 8px center; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; } .chips button { height: 26px; padding: 0 9px; border-radius: 13px; border: 1px solid var(--line-strong); background: #fff; }
+  .chips button:hover { background: var(--hover); } .chips button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .colors { display: grid; grid-template-columns: repeat(6, 24px); gap: 7px; align-items: center; }
+  .swatch { width: 24px; height: 24px; border-radius: 6px; border: 1px solid rgba(0,0,0,.14); padding: 0; }
+  .swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--chrome), 0 0 0 3.5px var(--ink); }
+  .check { display: flex; align-items: center; gap: 7px; cursor: pointer; } .check input { accent-color: var(--ink); margin: 0; }
+  .warn { color: var(--warn); font-size: 12px; margin: 4px 0 0; padding-left: 14px; } .warn li { margin-top: 2px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .dock { grid-column: 1; grid-row: 2; background: var(--chrome); border-top: 1px solid var(--line); }
+  .moves { display: flex; align-items: center; gap: 10px; padding: 8px 10px; overflow-x: auto; } .moves .label { color: var(--muted); }
+
+  @media (max-width: 820px) {
+    .bar { position: static; height: auto; grid-template-columns: minmax(0, 1fr) auto; padding: 8px 12px; row-gap: 8px; } .bar .seg { grid-column: 1 / -1; grid-row: 2; justify-self: start; } .brand .muted { display: none; }
+    .bar-end { gap: 4px; } .bar-end .btn { padding: 0 8px; }
+    .app, .inspector, .dock { min-width: 0; max-width: 100vw; }
+    .app { display: flex; flex-direction: column; height: auto; }
+    /* the mascot and the moves stay in view while editing: they sit on top, the panel scrolls below; a control
+       reached with Tab stops below them, not behind */
+    html { scroll-padding-top: calc(42vh + 56px); }
+    .view { position: sticky; top: 0; z-index: 5; height: 42vh; flex: none; }
+    .dock { order: 2; position: sticky; top: 42vh; z-index: 5; height: 56px; border-bottom: 1px solid var(--line); } .inspector { order: 3; border-left: 0; overflow: visible; }
+  }
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="brand">
+    <svg width="20" height="20" viewBox="6 20 88 76" aria-hidden="true"><path d="M22 31.8Q50 25 78 31.8Q89 33 89 46.7C89 67.2 82 85.4 68 87.7Q50 92.3 32 87.7C18 85.4 11 67.2 11 46.7Q11 33 22 31.8Z" fill="#1d1d1b"/></svg>
+    <b>Mascot Generator</b><span class="muted">Editor</span>
+  </div>
+  <nav class="seg" aria-label="Mode">
+    <button disabled aria-label="Scene (coming soon)" title="Coming with scenes">Scene</button>
+    <button aria-pressed="true" aria-current="page">Create</button>
+    <button disabled aria-label="Library (coming soon)" title="Coming with the library folder">Library</button>
+  </nav>
+  <div class="bar-end">
+    <button class="btn ghost" id="copy-link">Copy link</button>
+    <button class="btn primary" id="export">Export .glb</button>
+  </div>
+</header>
+<main class="app">
+  <div class="view">
+    <live-mascot id="mascot" rotatable role="img" aria-label="Your mascot, animated: drag to turn it"></live-mascot>
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+  </div>
+  <aside class="inspector" id="inspector" aria-label="Mascot settings"></aside>
+  <div class="dock moves"><span class="label">Move</span><div class="seg" id="moves" role="group" aria-label="Moves"></div><span class="muted" id="loop"></span></div>
+</main>
+<pre id="result" hidden></pre>
+<script src="dist/editor.js"></script>
+</body>
+</html>

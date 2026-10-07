@@ -5,6 +5,10 @@ pick it up, pose it and animate it for videos, games and apps.
 
 **Live demo:** https://p-diego.github.io/mascot-demo/
 
+**New editor (work in progress, Create mode only):** https://p-diego.github.io/mascot-demo/editor/ — built from the
+real project: presets, Randomize, shape, finish, color, face, 17 moves, **Copy link** (the whole mascot in the address)
+and **Export .glb** (skeleton plus every move).
+
 The page works like a small editor with three modes, and each mode builds its 3D content only when you open it:
 
 - **Scene**: two styles in one 10-second scene, with a timeline you can pause and scrub. A soft cushion mascot wakes up,
