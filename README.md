@@ -5,9 +5,10 @@ pick it up, pose it and animate it for videos, games and apps.
 
 **Live demo:** https://p-diego.github.io/mascot-demo/
 
-**New editor (work in progress, Create mode only):** https://p-diego.github.io/mascot-demo/editor/ — built from the
-real project: presets, Randomize, shape, finish, color, face, 17 moves, **Copy link** (the whole mascot in the address)
-and **Export .glb** (skeleton plus every move).
+**New editor (work in progress):** https://p-diego.github.io/mascot-demo/editor/ — built from the real project.
+**Create**: presets, Randomize, shape, finish, color, face, 17 moves, **Copy link** (the whole mascot in the address) and
+**Export .glb** (skeleton plus every move). **Scene**: a scene with its timeline (play, pause, scrub, drag to turn), scene
+links and **Export .glb**. The Library needs the local editor of the project (`mascot editor`), so it is off here.
 
 The page works like a small editor with three modes, and each mode builds its 3D content only when you open it:
 
