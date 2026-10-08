@@ -3,22 +3,17 @@
 A quick look at an open-source mascot generator in the making: build a 3D mascot from ready-made parts, then let any AI
 pick it up, pose it and animate it for videos, games and apps.
 
-**Live demo:** https://p-diego.github.io/mascot-demo/
+**Live:** https://p-diego.github.io/mascot-demo/ — the editor, built from the real project:
 
-**New editor (work in progress):** https://p-diego.github.io/mascot-demo/editor/ — built from the real project.
-**Create**: presets, Randomize, shape, finish, color, face, 17 moves, **Copy link** (the whole mascot in the address) and
-**Export .glb** (skeleton plus every move). **Scene**: a scene with its timeline (play, pause, scrub, drag to turn), scene
-links and **Export .glb**. The Library needs the local editor of the project (`mascot editor`), so it is off here.
+- **Create**: presets, Randomize, the body (shape, width, height, tilt), color and finish (the outline with its color,
+  and the body taking the color of its state), face, character, 17 moves, **Copy link** (the whole mascot in the
+  address) and **Export .glb** (skeleton plus every move).
+- **Scene**: a scene with its timeline (play, pause, scrub, drag to turn), scene links and **Export .glb**.
+- **Library**: it needs the local editor of the project (`mascot editor`), which reads your folder, so it is off here.
 
-The page works like a small editor with three modes, and each mode builds its 3D content only when you open it:
+`index.html` and `dist/editor.js` are a copy of the project's editor. The old addresses under `/editor/` open the main
+page, with their mascot or scene link.
 
-- **Scene**: two styles in one 10-second scene, with a timeline you can pause and scrub. A soft cushion mascot wakes up,
-  and a paper mascot on long legs walks in. They say hi, jump together and celebrate.
-- **Create**: shape, finish, color, arms and legs, 13 moves, and **Export .glb** (skeleton plus two baked moves). The
-  file opens in Blender, Godot, Unity or any glTF viewer.
-- **Library**: seven sets, each loaded on its own.
-  - Cushion styles: shapes and finishes.
-  - Paper styles: solid, outline, shape-shifting, cartoon moves, and the cushion shapes on long legs with knees.
-
-It is a single `index.html` with [three.js](https://threejs.org) from a CDN: no build step. Links can open a mode
-directly: `#create`, `#library`, `#library/paper-solid`. Early prototype, October 2026.
+**The first prototype** (October 2026), hand-made in a single page: https://p-diego.github.io/mascot-demo/classic/ —
+a 10-second scene with two styles, Create with 13 moves, and a Library of seven sets (cushion shapes and finishes, paper
+styles). Links can open a mode directly: `classic/#create`, `classic/#library/paper-solid`.
