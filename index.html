@@ -1211,12 +1211,20 @@ for (const b of document.querySelectorAll('.bar [role="tab"]')) b.onclick = () =
 openTab(location.hash.slice(1), false);
 
 // ---------- The drawing loop ----------
-let last = performance.now();
+// Not keeping the computer busy for nothing: 30 frames per second at most, and at most 2.5 million device pixels for the
+// whole page (a Retina screen does not get double resolution on a big window; the small cells stay sharp enough).
+const FPS = 30, PIXELS = 2.5e6;
+let last = performance.now(), drawnAt = -Infinity;
 function loop(now) {
+  requestAnimationFrame(loop);
+  if (now - drawnAt < 1000 / FPS - 4) return;   // one frame every 1/30 s, on 60 and 120 Hz screens alike
+  drawnAt = now;
   const t = FREEZE ? +FREEZE : now / 1000, dt = Math.max(0, Math.min((now - last) / 1000, 0.05)); last = now;   // never a negative step: the springs would explode
   const run = clock.playing && !clock.scrub && !FREEZE;
   if (FREEZE) clock.t = +FREEZE; else if (run) clock.t += dt;
   const canvas = renderer.domElement, W = canvas.clientWidth, Hh = canvas.clientHeight;
+  const dpr = Math.max(1, Math.min(devicePixelRatio, innerWidth < 700 ? 1.5 : 2, Math.sqrt(PIXELS / Math.max(W * Hh, 1))));
+  if (renderer.getPixelRatio() !== dpr) renderer.setPixelRatio(dpr);
   canvas.style.transform = `translateY(${scrollY}px)`;   // back to the top of the screen, see #gl-wrap
   if (canvas.width !== Math.floor(W * renderer.getPixelRatio()) || canvas.height !== Math.floor(Hh * renderer.getPixelRatio())) renderer.setSize(W, Hh, false);
   renderer.setScissor(0, 0, W, Hh); renderer.clear();
@@ -1239,7 +1247,6 @@ function loop(now) {
     renderer.setViewport(r.left, y, r.width, r.height); renderer.setScissor(r.left, y, r.width, r.height);
     renderer.render(v.scene, v.cam);
   }
-  requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 
